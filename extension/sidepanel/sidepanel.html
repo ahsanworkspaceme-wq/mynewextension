@@ -22,6 +22,7 @@
       <div class="topbar-actions">
         <select id="modelSelect" class="model-badge" title="Model" hidden></select>
         <span id="usage" class="usage" title="Tokens &amp; approx cost this session" hidden></span>
+        <button id="aiSetup" class="icon-btn" title="AI provider &amp; API key">🔑</button>
         <button id="exportChat" class="icon-btn" title="Export this chat">📤</button>
         <button id="saveSkill" class="icon-btn" title="Save last request as a skill">⚡</button>
         <button id="schedule" class="icon-btn" title="Schedule a saved skill">⏰</button>
@@ -84,7 +85,7 @@
       </div>
     </footer>
 
-    <!-- First-run onboarding -->
+    <!-- AI setup (first run + reopenable) -->
     <div id="onboarding" class="onboarding" hidden>
       <div class="ob-card">
         <div class="ob-logo">
@@ -92,20 +93,35 @@
             <path d="M4 12h11" /><path d="M13 7l5 5-5 5" /><path d="M3 8h3" opacity="0.6" /><path d="M3 16h3" opacity="0.6" />
           </svg>
         </div>
-        <h2>Welcome to Glide</h2>
-        <p>Glide needs your local backend running (it safely holds your Gemini API key).</p>
-        <ol class="ob-steps">
-          <li>Get a free key at <b>aistudio.google.com/apikey</b></li>
-          <li>In <code>backend/</code>: <code>npm install</code>, copy <code>.env.example</code> → <code>.env</code>, paste your key</li>
-          <li>Run <code>npm start</code> (starts <code>localhost:8787</code>)</li>
-        </ol>
-        <label class="ob-label">Backend URL</label>
-        <input id="obBackend" type="text" value="http://localhost:8787" />
+        <h2>Set up Glide</h2>
+        <p>Pick an AI provider and paste your API key. It's stored locally in your browser.</p>
+
+        <label class="ob-label">AI provider</label>
+        <select id="obProvider"></select>
+        <div class="ob-hint" id="obKeyHint"></div>
+
+        <div id="obKeyWrap">
+          <label class="ob-label">API key</label>
+          <input id="obKey" type="password" placeholder="Paste your API key here" autocomplete="off" />
+        </div>
+
         <div class="ob-actions">
-          <button id="obTest" class="ob-test">Test connection</button>
+          <button id="obConnect" class="ob-test">Connect &amp; load models</button>
           <span id="obStatus" class="ob-status"></span>
         </div>
-        <button id="obDone" class="ob-done">Start using Glide →</button>
+
+        <div id="obModelWrap" hidden>
+          <label class="ob-label">Model</label>
+          <select id="obModel"></select>
+        </div>
+
+        <details class="ob-advanced">
+          <summary>Advanced</summary>
+          <label class="ob-label">Backend URL</label>
+          <input id="obBackend" type="text" value="http://localhost:8787" />
+        </details>
+
+        <button id="obDone" class="ob-done" disabled>Start using Glide →</button>
       </div>
     </div>
 

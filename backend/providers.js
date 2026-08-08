@@ -1,50 +1,55 @@
 // providers.js — multi-provider LLM backend for Glide.
-// The extension always speaks Gemini's format (contents + functionCall/
-// functionResponse). This module translates that canonical format to/from each
-// provider so any API key works: Gemini, OpenAI, Anthropic (Claude), OpenRouter,
-// Groq, Mistral, and Ollama (local).
+// Provider, API key, and model can come FROM THE REQUEST (configured in the
+// extension UI) and fall back to backend/.env. The extension always speaks
+// Gemini's canonical format; this module translates to/from each provider so any
+// key works: Gemini, OpenAI, Anthropic (Claude), OpenRouter, Groq, Mistral,
+// and Ollama (local).
 
-const env = process.env;
-
-// ---- provider registry ------------------------------------------------------
-
-const REGISTRY = {
-  gemini: { kind: "gemini", key: env.GEMINI_API_KEY, base: "https://generativelanguage.googleapis.com/v1beta", defaultModel: "gemini-flash-latest" },
-  openai: { kind: "openai", key: env.OPENAI_API_KEY, base: "https://api.openai.com/v1", defaultModel: "gpt-4o-mini" },
-  openrouter: { kind: "openai", key: env.OPENROUTER_API_KEY, base: "https://openrouter.ai/api/v1", defaultModel: "google/gemini-2.0-flash-exp:free" },
-  groq: { kind: "openai", key: env.GROQ_API_KEY, base: "https://api.groq.com/openai/v1", defaultModel: "llama-3.3-70b-versatile" },
-  mistral: { kind: "openai", key: env.MISTRAL_API_KEY, base: "https://api.mistral.ai/v1", defaultModel: "mistral-large-latest" },
-  ollama: { kind: "openai", key: "ollama", base: (env.OLLAMA_URL || "http://localhost:11434") + "/v1", defaultModel: env.OLLAMA_MODEL || "llama3.1" },
-  anthropic: { kind: "anthropic", key: env.ANTHROPIC_API_KEY, base: "https://api.anthropic.com/v1", defaultModel: "claude-3-5-sonnet-latest" },
+const BASES = {
+  gemini: { kind: "gemini", base: "https://generativelanguage.googleapis.com/v1beta", defaultModel: "gemini-flash-latest", envKey: "GEMINI_API_KEY" },
+  openai: { kind: "openai", base: "https://api.openai.com/v1", defaultModel: "gpt-4o-mini", envKey: "OPENAI_API_KEY" },
+  openrouter: { kind: "openai", base: "https://openrouter.ai/api/v1", defaultModel: "openai/gpt-4o-mini", envKey: "OPENROUTER_API_KEY" },
+  groq: { kind: "openai", base: "https://api.groq.com/openai/v1", defaultModel: "llama-3.1-8b-instant", envKey: "GROQ_API_KEY" },
+  mistral: { kind: "openai", base: "https://api.mistral.ai/v1", defaultModel: "mistral-large-latest", envKey: "MISTRAL_API_KEY" },
+  ollama: { kind: "openai", base: "http://localhost:11434/v1", defaultModel: "llama3.2", envKey: null },
+  anthropic: { kind: "anthropic", base: "https://api.anthropic.com/v1", defaultModel: "claude-3-5-sonnet-latest", envKey: "ANTHROPIC_API_KEY" },
 };
 
-export const PROVIDER = (env.PROVIDER || "gemini").toLowerCase();
-export function activeProvider() {
-  const p = REGISTRY[PROVIDER];
-  if (!p) throw new Error(`Unknown PROVIDER "${PROVIDER}". Use: ${Object.keys(REGISTRY).join(", ")}`);
-  return { name: PROVIDER, ...p, model: env.MODEL || p.defaultModel };
+export const PROVIDER_NAMES = Object.keys(BASES);
+
+function httpError(status, message) {
+  const e = new Error(message);
+  e.status = status;
+  return e;
+}
+
+// Build the effective provider config from a request override or backend/.env.
+export function resolveProvider(o = {}) {
+  const name = (o.provider || process.env.PROVIDER || "gemini").toLowerCase();
+  const b = BASES[name];
+  if (!b) throw httpError(400, `Unknown provider "${name}". Use one of: ${PROVIDER_NAMES.join(", ")}`);
+  let base = b.base;
+  if (name === "ollama" && process.env.OLLAMA_URL) base = process.env.OLLAMA_URL.replace(/\/+$/, "") + "/v1";
+  const key = o.apiKey || (b.envKey ? process.env[b.envKey] : "ollama") || "";
+  const model = o.model || process.env.MODEL || (name === "ollama" && process.env.OLLAMA_MODEL) || b.defaultModel;
+  return { name, kind: b.kind, base, key, model };
 }
 
 // ---- helpers ----------------------------------------------------------------
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
 async function fetchRetry(url, opts, attempts = 3) {
-  let last;
   for (let i = 1; i <= attempts; i++) {
     try {
       const resp = await fetch(url, opts);
       if (resp.ok || (resp.status !== 429 && resp.status < 500)) return resp;
-      last = `HTTP ${resp.status}`;
     } catch (e) {
-      last = String(e?.message || e);
+      if (i === attempts) throw e;
     }
     if (i < attempts) await sleep(400 * 2 ** (i - 1));
   }
-  return fetch(url, opts); // final try, let caller read the error body
+  return fetch(url, opts);
 }
-
-// Gemini (UPPERCASE) schema -> JSON Schema (lowercase types)
 function toJsonSchema(s) {
   if (!s || typeof s !== "object") return s;
   const out = {};
@@ -58,41 +63,11 @@ function toJsonSchema(s) {
   }
   return out;
 }
-
-function geminiDecls(tools) {
-  return (tools?.[0]?.function_declarations) || [];
-}
+const decls = (tools) => tools?.[0]?.function_declarations || [];
 
 // ---- Gemini -----------------------------------------------------------------
 
-let geminiModelCache = null;
-async function geminiListModels(p) {
-  if (geminiModelCache) return geminiModelCache;
-  try {
-    const r = await fetch(`${p.base}/models?pageSize=200`, { headers: { "x-goog-api-key": p.key } });
-    const d = await r.json();
-    const models = (d.models || [])
-      .filter((m) => (m.supportedGenerationMethods || []).includes("generateContent"))
-      .map((m) => m.name.replace(/^models\//, ""))
-      .filter((n) => /^gemini/.test(n) && !/embedding|aqa|image-generation/.test(n));
-    if (models.length) geminiModelCache = models;
-    return models;
-  } catch (_) {
-    return [];
-  }
-}
-function geminiPick(models, prefer) {
-  return (
-    (prefer && models.includes(prefer) && prefer) ||
-    models.find((m) => /flash-latest/.test(m)) ||
-    models.find((m) => /2\.5-flash$/.test(m)) ||
-    models.find((m) => /flash/.test(m)) ||
-    models[0]
-  );
-}
-async function geminiChat(p, { contents, model, systemPrompt, tools }) {
-  const models = await geminiListModels(p);
-  const useModel = models.length ? geminiPick(models, model || p.model) : model || p.model;
+async function geminiChat(p, { contents, systemPrompt, tools }) {
   const payload = {
     system_instruction: { parts: [{ text: systemPrompt }] },
     contents,
@@ -100,7 +75,7 @@ async function geminiChat(p, { contents, model, systemPrompt, tools }) {
     tool_config: { function_calling_config: { mode: "AUTO" } },
     generationConfig: { temperature: 0.4, maxOutputTokens: 2048 },
   };
-  const resp = await fetchRetry(`${p.base}/models/${useModel}:generateContent`, {
+  const resp = await fetchRetry(`${p.base}/models/${p.model}:generateContent`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": p.key },
     body: JSON.stringify(payload),
@@ -108,15 +83,24 @@ async function geminiChat(p, { contents, model, systemPrompt, tools }) {
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) throw httpError(resp.status, data?.error?.message || `Gemini error ${resp.status}`);
   const cand = data?.candidates?.[0];
-  return { parts: cand?.content?.parts || [{ text: `(No content. ${cand?.finishReason || ""})` }], usage: data?.usageMetadata, model: useModel };
+  return { parts: cand?.content?.parts || [{ text: `(No content. ${cand?.finishReason || ""})` }], usage: data?.usageMetadata, model: p.model };
+}
+async function geminiModels(p) {
+  const r = await fetch(`${p.base}/models?pageSize=200`, { headers: { "x-goog-api-key": p.key } });
+  const d = await r.json();
+  if (!r.ok) throw httpError(r.status, d?.error?.message || "key rejected");
+  return (d.models || [])
+    .filter((m) => (m.supportedGenerationMethods || []).includes("generateContent"))
+    .map((m) => m.name.replace(/^models\//, ""))
+    .filter((n) => /^gemini/.test(n) && !/embedding|aqa|image-generation/.test(n));
 }
 
-// ---- OpenAI-compatible (openai/openrouter/groq/mistral/ollama) --------------
+// ---- OpenAI-compatible ------------------------------------------------------
 
 function toOpenAIMessages(contents, systemPrompt) {
   const msgs = [{ role: "system", content: systemPrompt }];
   let n = 0;
-  let pending = []; // [{name,id,used}] from last assistant turn
+  let pending = [];
   for (const c of contents) {
     const parts = c.parts || [];
     if (c.role === "model") {
@@ -157,57 +141,18 @@ function toOpenAIMessages(contents, systemPrompt) {
   }
   return msgs;
 }
-function imgPart(p) {
-  return { type: "image_url", image_url: { url: `data:${p.inlineData.mimeType};base64,${p.inlineData.data}` } };
+const imgPart = (p) => ({ type: "image_url", image_url: { url: `data:${p.inlineData.mimeType};base64,${p.inlineData.data}` } });
+function openaiToolDefs(tools) {
+  return decls(tools).map((d) => ({ type: "function", function: { name: d.name, description: d.description, parameters: toJsonSchema(d.parameters) || { type: "object", properties: {} } } }));
 }
-function openaiTools(tools) {
-  return geminiDecls(tools).map((d) => ({
-    type: "function",
-    function: { name: d.name, description: d.description, parameters: toJsonSchema(d.parameters) || { type: "object", properties: {} } },
-  }));
+function authHeaders(p) {
+  const h = { Authorization: `Bearer ${p.key}` };
+  if (p.name === "openrouter") h["HTTP-Referer"] = "https://glide.local";
+  return h;
 }
-let openaiModelCache = null;
-async function openaiListModels(p) {
-  if (openaiModelCache) return openaiModelCache;
-  try {
-    const r = await fetch(`${p.base}/models`, { headers: authHeaders(p) });
-    const d = await r.json();
-    const ids = (d.data || d.models || []).map((m) => m.id || m.name).filter(Boolean);
-    if (ids.length) openaiModelCache = ids;
-    return ids;
-  } catch (_) {
-    return [];
-  }
-}
-// Prefer a known tool + vision capable model so the agent's actions work.
-function openaiPick(models, prefer) {
-  if (prefer && models.includes(prefer)) return prefer;
-  const preferred = [
-    "openai/gpt-4o-mini",
-    "google/gemini-2.0-flash-001",
-    "google/gemini-flash-1.5",
-    "anthropic/claude-3.5-sonnet",
-    "openai/gpt-4o",
-    "gpt-4o-mini",
-  ];
-  for (const m of preferred) if (models.includes(m)) return m;
-  return models.find((m) => /gpt-4o-mini|gemini.*flash|claude-3\.5|claude-3-5/i.test(m)) || models[0];
-}
-async function openaiChat(p, { contents, model, systemPrompt, tools }) {
-  const models = await openaiListModels(p);
-  const useModel = models.length ? openaiPick(models, model || p.model) : model || p.model;
-  const body = {
-    model: useModel,
-    messages: toOpenAIMessages(contents, systemPrompt),
-    tools: openaiTools(tools),
-    tool_choice: "auto",
-    temperature: 0.4,
-  };
-  const resp = await fetchRetry(`${p.base}/chat/completions`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders(p) },
-    body: JSON.stringify(body),
-  });
+async function openaiChat(p, { contents, systemPrompt, tools }) {
+  const body = { model: p.model, messages: toOpenAIMessages(contents, systemPrompt), tools: openaiToolDefs(tools), tool_choice: "auto", temperature: 0.4 };
+  const resp = await fetchRetry(`${p.base}/chat/completions`, { method: "POST", headers: { "Content-Type": "application/json", ...authHeaders(p) }, body: JSON.stringify(body) });
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) throw httpError(resp.status, data?.error?.message || `${p.name} error ${resp.status}`);
   const msg = data.choices?.[0]?.message || {};
@@ -221,19 +166,16 @@ async function openaiChat(p, { contents, model, systemPrompt, tools }) {
   }
   if (msg.content) parts.push({ text: msg.content });
   const u = data.usage || {};
-  return {
-    parts: parts.length ? parts : [{ text: "(no response)" }],
-    usage: { promptTokenCount: u.prompt_tokens, candidatesTokenCount: u.completion_tokens, totalTokenCount: u.total_tokens },
-    model: useModel,
-  };
+  return { parts: parts.length ? parts : [{ text: "(no response)" }], usage: { promptTokenCount: u.prompt_tokens, candidatesTokenCount: u.completion_tokens, totalTokenCount: u.total_tokens }, model: p.model };
 }
-function authHeaders(p) {
-  const h = { Authorization: `Bearer ${p.key}` };
-  if (p.name === "openrouter") h["HTTP-Referer"] = "https://glide.local"; // OpenRouter attribution (optional)
-  return h;
+async function openaiModels(p) {
+  const r = await fetch(`${p.base}/models`, { headers: authHeaders(p) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw httpError(r.status, d?.error?.message || "key rejected");
+  return (d.data || d.models || []).map((m) => m.id || m.name).filter(Boolean).sort();
 }
 
-// ---- Anthropic (Claude) -----------------------------------------------------
+// ---- Anthropic --------------------------------------------------------------
 
 function toAnthropic(contents) {
   const messages = [];
@@ -275,36 +217,13 @@ function toAnthropic(contents) {
   }
   return messages;
 }
-function anthImg(p) {
-  return { type: "image", source: { type: "base64", media_type: p.inlineData.mimeType, data: p.inlineData.data } };
+const anthImg = (p) => ({ type: "image", source: { type: "base64", media_type: p.inlineData.mimeType, data: p.inlineData.data } });
+function anthropicToolDefs(tools) {
+  return decls(tools).map((d) => ({ name: d.name, description: d.description, input_schema: toJsonSchema(d.parameters) || { type: "object", properties: {} } }));
 }
-function anthropicTools(tools) {
-  return geminiDecls(tools).map((d) => ({ name: d.name, description: d.description, input_schema: toJsonSchema(d.parameters) || { type: "object", properties: {} } }));
-}
-async function anthropicListModels(p) {
-  try {
-    const r = await fetch(`${p.base}/models`, { headers: { "x-api-key": p.key, "anthropic-version": "2023-06-01" } });
-    const d = await r.json();
-    const ids = (d.data || []).map((m) => m.id).filter(Boolean);
-    if (ids.length) return ids;
-  } catch (_) {}
-  return ["claude-3-5-sonnet-latest", "claude-3-5-haiku-latest", "claude-3-opus-latest"];
-}
-async function anthropicChat(p, { contents, model, systemPrompt, tools }) {
-  const useModel = model || p.model;
-  const body = {
-    model: useModel,
-    max_tokens: 2048,
-    system: systemPrompt,
-    messages: toAnthropic(contents),
-    tools: anthropicTools(tools),
-    tool_choice: { type: "auto" },
-  };
-  const resp = await fetchRetry(`${p.base}/messages`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-api-key": p.key, "anthropic-version": "2023-06-01" },
-    body: JSON.stringify(body),
-  });
+async function anthropicChat(p, { contents, systemPrompt, tools }) {
+  const body = { model: p.model, max_tokens: 2048, system: systemPrompt, messages: toAnthropic(contents), tools: anthropicToolDefs(tools), tool_choice: { type: "auto" } };
+  const resp = await fetchRetry(`${p.base}/messages`, { method: "POST", headers: { "Content-Type": "application/json", "x-api-key": p.key, "anthropic-version": "2023-06-01" }, body: JSON.stringify(body) });
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) throw httpError(resp.status, data?.error?.message || `Anthropic error ${resp.status}`);
   const parts = [];
@@ -313,42 +232,34 @@ async function anthropicChat(p, { contents, model, systemPrompt, tools }) {
     else if (b.type === "tool_use") parts.push({ functionCall: { name: b.name, args: b.input || {} } });
   }
   const u = data.usage || {};
-  return {
-    parts: parts.length ? parts : [{ text: "(no response)" }],
-    usage: { promptTokenCount: u.input_tokens, candidatesTokenCount: u.output_tokens, totalTokenCount: (u.input_tokens || 0) + (u.output_tokens || 0) },
-    model: useModel,
-  };
+  return { parts: parts.length ? parts : [{ text: "(no response)" }], usage: { promptTokenCount: u.input_tokens, candidatesTokenCount: u.output_tokens, totalTokenCount: (u.input_tokens || 0) + (u.output_tokens || 0) }, model: p.model };
+}
+async function anthropicModels(p) {
+  try {
+    const r = await fetch(`${p.base}/models`, { headers: { "x-api-key": p.key, "anthropic-version": "2023-06-01" } });
+    const d = await r.json();
+    if (r.ok && (d.data || []).length) return d.data.map((m) => m.id);
+    if (!r.ok) throw httpError(r.status, d?.error?.message || "key rejected");
+  } catch (e) {
+    if (e.status) throw e;
+  }
+  return ["claude-3-5-sonnet-latest", "claude-3-5-haiku-latest", "claude-3-opus-latest"];
 }
 
 // ---- dispatch ---------------------------------------------------------------
 
-function httpError(status, message) {
-  const e = new Error(message);
-  e.status = status;
-  return e;
+export async function chat(o) {
+  const p = resolveProvider(o);
+  if (!p.key) throw httpError(400, `No API key for provider "${p.name}". Add it in Glide's settings.`);
+  if (p.kind === "gemini") return geminiChat(p, o);
+  if (p.kind === "anthropic") return anthropicChat(p, o);
+  return openaiChat(p, o);
 }
 
-export async function listModels() {
-  const p = activeProvider();
-  if (p.kind === "gemini") return geminiListModels(p);
-  if (p.kind === "anthropic") return anthropicListModels(p);
-  return openaiListModels(p);
-}
-
-export async function chat({ contents, model, systemPrompt, tools }) {
-  const p = activeProvider();
-  if (!p.key) throw httpError(500, `No API key set for provider "${p.name}". Add it to backend/.env.`);
-  if (p.kind === "gemini") return geminiChat(p, { contents, model, systemPrompt, tools });
-  if (p.kind === "anthropic") return anthropicChat(p, { contents, model, systemPrompt, tools });
-  return openaiChat(p, { contents, model, systemPrompt, tools });
-}
-
-export async function defaultModel() {
-  const p = activeProvider();
-  const models = await listModels();
-  if (!models.length) return p.model;
-  if (models.includes(p.model)) return p.model;
-  if (p.kind === "gemini") return geminiPick(models, p.model);
-  if (p.kind === "openai") return openaiPick(models, p.model);
-  return models[0];
+export async function listModels(o) {
+  const p = resolveProvider(o);
+  if (!p.key) throw httpError(400, `No API key for provider "${p.name}".`);
+  if (p.kind === "gemini") return geminiModels(p);
+  if (p.kind === "anthropic") return anthropicModels(p);
+  return openaiModels(p);
 }

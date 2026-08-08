@@ -44,8 +44,11 @@ async function getConfig() {
     "blockedSites",
     "siteAccess",
     "allowedDomains",
+    "provider",
+    "apiKeys",
     "model",
   ]);
+  const provider = s.provider || "gemini";
   return {
     backendUrl: (s.backendUrl || DEFAULTS.backendUrl).replace(/\/+$/, ""),
     maxSteps: Number(s.maxSteps) || DEFAULTS.maxSteps,
@@ -57,7 +60,9 @@ async function getConfig() {
       .filter(Boolean),
     siteAccess: s.siteAccess || DEFAULTS.siteAccess,
     allowedDomains: new Set(s.allowedDomains || []),
-    model: s.model || DEFAULTS.model,
+    provider,
+    apiKey: (s.apiKeys || {})[provider] || "",
+    model: s.model || "",
   };
 }
 
@@ -629,14 +634,14 @@ function siteIsBlocked(host, blockedSites) {
 
 // ---- backend call -----------------------------------------------------------
 
-async function callBackend(backendUrl, contents, model, attempts = 3) {
+async function callBackend(backendUrl, contents, cfg, attempts = 3) {
   let lastErr = "";
   for (let i = 1; i <= attempts; i++) {
     try {
       const resp = await fetch(`${backendUrl}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents, model }),
+        body: JSON.stringify({ contents, provider: cfg.provider, apiKey: cfg.apiKey, model: cfg.model }),
       });
       if (resp.ok) return resp.json();
       const body = await resp.text().catch(() => "");
@@ -787,7 +792,7 @@ api.runtime.onConnect.addListener((port) => {
 
         let data;
         try {
-          data = await callBackend(config.backendUrl, contents, config.model);
+          data = await callBackend(config.backendUrl, contents, config);
         } catch (err) {
           send({ type: "error", text: `Could not reach the backend at ${config.backendUrl}. Is it running? (cd backend && npm start)\n\n${String(err.message || err)}` });
           return;

@@ -29,31 +29,13 @@ if (!existsSync(join(BACKEND, "node_modules"))) {
   log("\n[2/4] Backend dependencies already installed ✓");
 }
 
-// 3. Ensure backend/.env has a Gemini API key
-log("\n[3/4] Checking backend configuration…");
+// 3. Ensure a minimal .env exists (keys are set in the extension, not here)
+log("\n[3/4] Preparing backend…");
 const envPath = join(BACKEND, ".env");
 const examplePath = join(BACKEND, ".env.example");
-if (!existsSync(envPath)) copyFileSync(examplePath, envPath);
-let env = readFileSync(envPath, "utf8");
-const keyMatch = env.match(/^GEMINI_API_KEY=(.*)$/m);
-const currentKey = keyMatch ? keyMatch[1].trim() : "";
-const placeholder = !currentKey || /your-gemini-api-key-here|AIza\.\.\./.test(currentKey);
-
-if (placeholder) {
-  log("\n   You need a free Gemini API key: https://aistudio.google.com/apikey");
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  const key = (await rl.question("   Paste your Gemini API key: ")).trim();
-  await rl.close();
-  if (key) {
-    env = keyMatch ? env.replace(/^GEMINI_API_KEY=.*$/m, `GEMINI_API_KEY=${key}`) : env + `\nGEMINI_API_KEY=${key}\n`;
-    writeFileSync(envPath, env);
-    log("   Saved to backend/.env ✓");
-  } else {
-    log("   ⚠ No key entered. Add it to backend/.env later, then run `npm run backend`.");
-  }
-} else {
-  log("   API key already set ✓");
-}
+if (!existsSync(envPath) && existsSync(examplePath)) copyFileSync(examplePath, envPath);
+log("   You'll pick your AI provider, paste your API key, and choose a model");
+log("   inside the extension (click the 🔑 button) — no key needed here.");
 
 // 4. Print the (manual) Chrome step, then start the backend
 log("\n[4/4] Starting the backend…");

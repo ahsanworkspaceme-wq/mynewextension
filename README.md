@@ -210,10 +210,13 @@ backend translates it to whatever provider you choose in `backend/.env`:
 | `mistral` | `MISTRAL_API_KEY` | Mistral models. |
 | `ollama` | _(none)_ | Local & offline — run `ollama serve`. |
 
-Set `PROVIDER` and the matching key in `backend/.env`, restart the backend, and
-pick a model from the header dropdown. Tool-calling (the agent's actions) is
-translated per provider, so the full agent works on all of them (vision needs a
-multimodal model).
+**You configure everything in the extension** — no `.env` editing needed. Click
+the **🔑** button in the side panel, pick a provider, paste your API key, hit
+**Connect** to load its models, choose one, and you're done. Your key is stored
+locally in the browser and sent only to your own backend. (Setting `PROVIDER` +
+a key in `backend/.env` still works as a server-side fallback, e.g. for
+deployments.) Tool-calling is translated per provider, so the full agent works on
+all of them (vision needs a multimodal model).
 
 ## Project structure
 

@@ -19,11 +19,28 @@ const els = {
   pick: document.getElementById("pick"),
   skillsBar: document.getElementById("skillsBar"),
   confirmMode: document.getElementById("confirmMode"),
+  aiSetup: document.getElementById("aiSetup"),
   onboarding: document.getElementById("onboarding"),
-  obBackend: document.getElementById("obBackend"),
-  obTest: document.getElementById("obTest"),
+  obProvider: document.getElementById("obProvider"),
+  obKeyHint: document.getElementById("obKeyHint"),
+  obKeyWrap: document.getElementById("obKeyWrap"),
+  obKey: document.getElementById("obKey"),
+  obConnect: document.getElementById("obConnect"),
   obStatus: document.getElementById("obStatus"),
+  obModelWrap: document.getElementById("obModelWrap"),
+  obModel: document.getElementById("obModel"),
+  obBackend: document.getElementById("obBackend"),
   obDone: document.getElementById("obDone"),
+};
+
+const PROVIDER_INFO = {
+  gemini: { label: "Google Gemini", url: "https://aistudio.google.com/apikey", needsKey: true },
+  openrouter: { label: "OpenRouter — many models, one key", url: "https://openrouter.ai/keys", needsKey: true },
+  groq: { label: "Groq — very fast, free tier", url: "https://console.groq.com/keys", needsKey: true },
+  openai: { label: "OpenAI (GPT)", url: "https://platform.openai.com/api-keys", needsKey: true },
+  anthropic: { label: "Anthropic (Claude)", url: "https://console.anthropic.com/settings/keys", needsKey: true },
+  mistral: { label: "Mistral", url: "https://console.mistral.ai/api-keys", needsKey: true },
+  ollama: { label: "Ollama — local & free (no key)", url: "https://ollama.com/download", needsKey: false },
 };
 
 let port = null;
@@ -549,25 +566,46 @@ els.confirmMode.addEventListener("change", () => {
   api.storage.local.set({ confirmMode: els.confirmMode.value });
 });
 
-// ---- model badge (from backend /health) -------------------------------------
+// ---- provider / key / model configuration -----------------------------------
 
 async function backendBase() {
   const s = await api.storage.local.get(["backendUrl"]);
   return (s.backendUrl || "http://localhost:8787").replace(/\/+$/, "");
 }
+async function getStored() {
+  const s = await api.storage.local.get(["provider", "apiKeys", "model", "backendUrl"]);
+  const provider = s.provider || "gemini";
+  return { provider, apiKeys: s.apiKeys || {}, apiKey: (s.apiKeys || {})[provider] || "", model: s.model || "", backendUrl: s.backendUrl || "http://localhost:8787" };
+}
+// Ask the backend which models this provider + key can use.
+async function fetchModels(backendUrl, provider, apiKey) {
+  const r = await fetch(`${backendUrl}/api/models`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ provider, apiKey }),
+  });
+  const j = await r.json();
+  if (!r.ok || !j.ok) throw new Error(j.error || `HTTP ${r.status}`);
+  return j.models || [];
+}
+function shortModel(m) {
+  return m.replace(/^gemini-/, "").replace(/^models\//, "");
+}
+// Populate the header model dropdown from the configured provider + key.
 async function loadModels() {
   const url = await backendBase();
-  const s = await api.storage.local.get(["model"]);
-  const chosen = s.model || "gemini-2.5-flash";
+  const { provider, apiKey, model } = await getStored();
+  if (!apiKey && provider !== "ollama") return false;
   try {
-    const j = await (await fetch(`${url}/health`)).json();
-    const models = j.models && j.models.length ? j.models : [j.model || "gemini-2.5-flash"];
-    els.modelSelect.innerHTML = models.map((m) => `<option value="${m}">${m.replace("gemini-", "")}</option>`).join("");
-    els.modelSelect.value = models.includes(chosen) ? chosen : models[0];
+    const models = await fetchModels(url, provider, apiKey);
+    if (!models.length) return false;
+    els.modelSelect.innerHTML = models.map((m) => `<option value="${m}">${shortModel(m)}</option>`).join("");
+    els.modelSelect.value = models.includes(model) ? model : models[0];
+    if (!models.includes(model)) api.storage.local.set({ model: models[0] });
     els.modelSelect.hidden = false;
     return true;
   } catch (_) {
-    return false; // backend not reachable
+    return false;
   }
 }
 els.modelSelect.addEventListener("change", () => {
@@ -720,38 +758,88 @@ els.exportChat.addEventListener("click", () => {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
 
-// ---- onboarding -------------------------------------------------------------
+// ---- AI setup (provider + key + model) --------------------------------------
 
-async function maybeOnboard() {
-  const s = await api.storage.local.get(["onboarded", "backendUrl"]);
-  els.obBackend.value = s.backendUrl || "http://localhost:8787";
-  const reachable = await loadModels();
-  if (!s.onboarded && !reachable) {
-    els.onboarding.hidden = false;
+let obModels = [];
+
+function populateProviders() {
+  els.obProvider.innerHTML = Object.entries(PROVIDER_INFO)
+    .map(([id, info]) => `<option value="${id}">${info.label}</option>`)
+    .join("");
+}
+function onProviderChange() {
+  const info = PROVIDER_INFO[els.obProvider.value];
+  els.obKeyWrap.style.display = info.needsKey ? "" : "none";
+  els.obKeyHint.innerHTML = info.needsKey
+    ? `Get a key: <a href="${info.url}" target="_blank" rel="noopener">${info.url.replace("https://", "")}</a>`
+    : `Install Ollama and run <code>ollama serve</code> — no key needed. <a href="${info.url}" target="_blank" rel="noopener">Download</a>`;
+  els.obModelWrap.hidden = true;
+  els.obDone.disabled = true;
+  els.obStatus.textContent = "";
+}
+async function obConnect() {
+  const provider = els.obProvider.value;
+  const info = PROVIDER_INFO[provider];
+  const apiKey = els.obKey.value.trim();
+  const url = els.obBackend.value.trim().replace(/\/+$/, "") || "http://localhost:8787";
+  if (info.needsKey && !apiKey) {
+    els.obStatus.textContent = "Paste your API key first.";
+    els.obStatus.className = "ob-status err";
+    return;
+  }
+  els.obStatus.textContent = "Connecting…";
+  els.obStatus.className = "ob-status";
+  els.obConnect.disabled = true;
+  try {
+    obModels = await fetchModels(url, provider, apiKey);
+    if (!obModels.length) throw new Error("No models returned");
+    els.obModel.innerHTML = obModels.map((m) => `<option value="${m}">${shortModel(m)}</option>`).join("");
+    els.obModelWrap.hidden = false;
+    els.obStatus.textContent = `✓ Connected — ${obModels.length} models`;
+    els.obStatus.className = "ob-status ok";
+    els.obDone.disabled = false;
+  } catch (err) {
+    els.obStatus.textContent = `✕ ${String(err.message || err).slice(0, 80)}`;
+    els.obStatus.className = "ob-status err";
+  } finally {
+    els.obConnect.disabled = false;
   }
 }
-els.obTest.addEventListener("click", async () => {
-  const url = els.obBackend.value.trim().replace(/\/+$/, "");
-  els.obStatus.textContent = "Testing…";
-  els.obStatus.className = "ob-status";
-  try {
-    const j = await (await fetch(`${url}/health`)).json();
-    if (j.ok) {
-      els.obStatus.textContent = `✓ Connected (${j.model})`;
-      els.obStatus.className = "ob-status ok";
-      await api.storage.local.set({ backendUrl: url });
-    } else throw new Error("bad response");
-  } catch (_) {
-    els.obStatus.textContent = "✕ Not reachable — is the backend running?";
-    els.obStatus.className = "ob-status err";
-  }
-});
-els.obDone.addEventListener("click", async () => {
-  const url = els.obBackend.value.trim().replace(/\/+$/, "");
-  await api.storage.local.set({ backendUrl: url, onboarded: true });
+async function saveSetup() {
+  const provider = els.obProvider.value;
+  const apiKey = els.obKey.value.trim();
+  const url = els.obBackend.value.trim().replace(/\/+$/, "") || "http://localhost:8787";
+  const model = els.obModel.value || (obModels[0] || "");
+  const s = await api.storage.local.get(["apiKeys"]);
+  const apiKeys = s.apiKeys || {};
+  if (apiKey) apiKeys[provider] = apiKey;
+  await api.storage.local.set({ provider, apiKeys, model, backendUrl: url, onboarded: true });
   els.onboarding.hidden = true;
   loadModels();
-});
+}
+async function openSetup() {
+  const { provider, apiKey, backendUrl } = await getStored();
+  populateProviders();
+  els.obProvider.value = provider;
+  els.obBackend.value = backendUrl;
+  els.obKey.value = apiKey;
+  onProviderChange();
+  els.onboarding.hidden = false;
+}
+async function maybeOnboard() {
+  populateProviders();
+  const { provider, apiKey } = await getStored();
+  const reachable = await loadModels();
+  const needsKey = PROVIDER_INFO[provider]?.needsKey !== false;
+  if (!reachable && (!apiKey && needsKey)) {
+    openSetup();
+  }
+}
+els.obProvider.addEventListener("change", onProviderChange);
+els.obConnect.addEventListener("click", obConnect);
+els.obKey.addEventListener("keydown", (e) => e.key === "Enter" && obConnect());
+els.obDone.addEventListener("click", saveSetup);
+els.aiSetup.addEventListener("click", openSetup);
 
 // ---- context-menu prefill ("Ask Glide about selection") ---------------------
 

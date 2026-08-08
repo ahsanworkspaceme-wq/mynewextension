@@ -12,20 +12,9 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 
-import { chat, listModels, defaultModel, PROVIDER, activeProvider } from "./providers.js";
+import { chat, listModels, resolveProvider, PROVIDER_NAMES } from "./providers.js";
 
 const { PORT = 8787, ALLOWED_ORIGINS = "*" } = process.env;
-
-try {
-  const p = activeProvider();
-  if (!p.key && p.name !== "ollama") {
-    console.error(`\n❌  No API key set for provider "${p.name}". Add it to backend/.env (see .env.example).\n`);
-    process.exit(1);
-  }
-} catch (err) {
-  console.error(`\n❌  ${err.message}\n`);
-  process.exit(1);
-}
 
 const app = express();
 app.use(express.json({ limit: "2mb" }));
@@ -373,32 +362,38 @@ const TOOLS = [
 
 // ---- routes -----------------------------------------------------------------
 
-app.get("/health", async (_req, res) => {
+app.get("/health", (_req, res) => {
+  const envDefault = resolveProvider();
+  res.json({ ok: true, providers: PROVIDER_NAMES, envProvider: envDefault.name, envHasKey: !!envDefault.key });
+});
+
+// List models for a provider + key (used by the extension settings/dropdown).
+app.post("/api/models", async (req, res) => {
+  const { provider, apiKey } = req.body || {};
   try {
-    const [models, model] = await Promise.all([listModels(), defaultModel()]);
-    res.json({ ok: true, provider: PROVIDER, model, models });
+    const models = await listModels({ provider, apiKey });
+    res.json({ ok: true, models });
   } catch (err) {
-    res.json({ ok: true, provider: PROVIDER, model: activeProvider().model, models: [] });
+    res.status(err.status || 502).json({ ok: false, error: err.message });
   }
 });
 
 app.post("/api/chat", async (req, res) => {
-  const { contents, model } = req.body || {};
+  const { contents, provider, apiKey, model } = req.body || {};
   if (!Array.isArray(contents) || contents.length === 0) {
     return res.status(400).json({ error: "Body must include a non-empty `contents` array." });
   }
   try {
-    const result = await chat({ contents, model, systemPrompt: SYSTEM_PROMPT, tools: TOOLS });
+    const result = await chat({ contents, provider, apiKey, model, systemPrompt: SYSTEM_PROMPT, tools: TOOLS });
     return res.json({ parts: result.parts, usage: result.usage, model: result.model });
   } catch (err) {
-    console.error(`${PROVIDER} error:`, err.message);
+    console.error(`${provider || "provider"} error:`, err.message);
     return res.status(err.status || 502).json({ error: err.message });
   }
 });
 
 app.listen(PORT, () => {
-  const p = activeProvider();
   console.log(`\n➤ Glide backend running on http://localhost:${PORT}`);
-  console.log(`  Provider: ${p.name}   Model: ${p.model}`);
+  console.log(`  Configure the provider, API key & model in the extension.`);
   console.log(`  Health check: http://localhost:${PORT}/health\n`);
 });
