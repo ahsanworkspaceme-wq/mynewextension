@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gemini Agent</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo">✦</span>
+        <span class="brand-name">Gemini Agent</span>
+      </div>
+      <div class="topbar-actions">
+        <button id="newChat" class="icon-btn" title="New chat">＋</button>
+        <button id="openOptions" class="icon-btn" title="Settings">⚙</button>
+      </div>
+    </header>
+
+    <main id="messages" class="messages">
+      <div class="welcome">
+        <div class="welcome-logo">✦</div>
+        <h1>Gemini Agent</h1>
+        <p>I can read this page and take actions for you — click, type, scroll and navigate.</p>
+        <div class="suggestions">
+          <button class="chip" data-prompt="Summarize this page in a few bullet points.">Summarize this page</button>
+          <button class="chip" data-prompt="What are the main links on this page? List them.">List the main links</button>
+          <button class="chip" data-prompt="Extract the key facts and figures from this page.">Extract key facts</button>
+        </div>
+      </div>
+    </main>
+
+    <div id="statusBar" class="status-bar" hidden></div>
+
+    <footer class="composer">
+      <textarea
+        id="input"
+        rows="1"
+        placeholder="Ask the agent to do something on this page…"
+        autocomplete="off"
+      ></textarea>
+      <button id="send" class="send-btn" title="Send">➤</button>
+    </footer>
+
+    <script src="sidepanel.js"></script>
+  </body>
+</html>
