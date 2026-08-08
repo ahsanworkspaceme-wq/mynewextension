@@ -6,7 +6,11 @@
   "scripts": {
     "icons": "node scripts/gen-icons.mjs",
     "setup": "node scripts/gen-icons.mjs && cd backend && npm install",
-    "backend": "cd backend && npm start"
+    "backend": "cd backend && npm start",
+    "verify": "node scripts/verify-tools.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "^24.0.0"
   },
   "license": "MIT"
 }

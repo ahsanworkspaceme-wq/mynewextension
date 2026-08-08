@@ -298,12 +298,13 @@
   // ---- structured extraction ------------------------------------------------
 
   function extractData() {
+    const txt = (el) => clean(el.innerText || el.textContent || "");
     const tables = [];
     document.querySelectorAll("table").forEach((tbl, i) => {
       if (i >= 10) return;
       const rows = [];
       tbl.querySelectorAll("tr").forEach((tr) => {
-        const cells = [...tr.querySelectorAll("th,td")].map((c) => clean(c.innerText).replace(/\t/g, " "));
+        const cells = [...tr.querySelectorAll("th,td")].map((c) => txt(c).replace(/\t/g, " "));
         if (cells.length) rows.push(cells.join("\t"));
       });
       if (rows.length) tables.push(`Table ${i + 1}:\n${rows.slice(0, 50).join("\n")}`);
@@ -311,13 +312,13 @@
     const links = [];
     document.querySelectorAll("a[href]").forEach((a, i) => {
       if (i >= 60) return;
-      const t = clean(a.innerText);
+      const t = txt(a);
       if (t) links.push(`${t} -> ${a.href}`);
     });
     const lists = [];
     document.querySelectorAll("ul,ol").forEach((l, i) => {
       if (i >= 8) return;
-      const items = [...l.querySelectorAll("li")].slice(0, 30).map((li) => "• " + clean(li.innerText)).filter((s) => s.length > 2);
+      const items = [...l.querySelectorAll("li")].slice(0, 30).map((li) => "• " + txt(li)).filter((s) => s.length > 2);
       if (items.length) lists.push(items.join("\n"));
     });
     return {
@@ -388,10 +389,16 @@
 
   // ---- action handlers ------------------------------------------------------
 
+  function safeScrollIntoView(el, opts) {
+    try {
+      if (typeof el.scrollIntoView === "function") el.scrollIntoView(opts);
+    } catch (_) {}
+  }
+
   async function doClick(index) {
     const el = findByIndex(index);
     if (!el) return { ok: false, error: `No element with index ${index}. Call get_page_state to refresh indices.` };
-    el.scrollIntoView({ block: "center", inline: "center" });
+    safeScrollIntoView(el, { block: "center", inline: "center" });
     highlightElement(el);
     await pause(350);
     const r = el.getBoundingClientRect();
@@ -411,7 +418,7 @@
   async function doType(index, text, submit) {
     const el = findByIndex(index);
     if (!el) return { ok: false, error: `No element with index ${index}. Call get_page_state to refresh indices.` };
-    el.scrollIntoView({ block: "center" });
+    safeScrollIntoView(el, { block: "center" });
     highlightElement(el);
     await pause(300);
     if (!typeInto(el, text, submit)) return { ok: false, error: `Element [${index}] is not typable.` };
