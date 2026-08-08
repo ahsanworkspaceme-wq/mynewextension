@@ -45,7 +45,14 @@ extension, so your key stays secure.
   an **n8n** workflow via the n8n API — more reliable than dragging nodes).
 - 📄 **PDF & structured data** — reads PDFs and extracts tables/lists/links.
 - 🙋 **Handover** — pauses and asks you for CAPTCHAs, 2FA, or decisions (`ask_user`).
-- 📊 **Token usage** shown live in the header.
+- 📊 **Token usage + approx cost** shown live in the header.
+- ✍️ **Rich markdown** answers (headings, tables, lists, code, links) that stream
+  in with a typewriter effect.
+- 🔀 **Model switcher** — flip between `gemini-2.5-flash` / `pro` from the header.
+- 🚀 **Onboarding wizard** on first run, and a **right-click → Ask Glide** menu.
+- 🎯 **Element picker** (point at something and say "click this"), and **export**
+  the chat as Markdown.
+- ♻️ **Resilient** — automatic retry/backoff on transient API/network errors.
 - 🗂️ **Multi-tab** — opens new tabs and switches between them to research across
   several sites and compile the results (`list_tabs`, `open_tab`, `switch_tab`, `close_tab`).
 - ⚡ **Power mode (Chrome)** — optional OS-level mouse/keyboard input via the

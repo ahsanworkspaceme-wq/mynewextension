@@ -15,7 +15,22 @@ const DEFAULTS = {
   nativeInput: false, // use chrome.debugger for OS-level input
   blockedSites: "chase.com, bankofamerica.com, wellsfargo.com, paypal.com, coinbase.com",
   siteAccess: "all", // all | ask (ask once per new domain)
+  model: "gemini-2.5-flash",
 };
+
+// Approx Gemini pricing (USD per token) for a rough live cost estimate.
+const PRICING = {
+  "gemini-2.5-flash": { in: 0.3e-6, out: 2.5e-6 },
+  "gemini-2.5-flash-lite": { in: 0.1e-6, out: 0.4e-6 },
+  "gemini-2.5-pro": { in: 1.25e-6, out: 10e-6 },
+  "gemini-2.0-flash": { in: 0.1e-6, out: 0.4e-6 },
+};
+function estimateCost(model, usage) {
+  const p = PRICING[model] || PRICING["gemini-2.5-flash"];
+  const inTok = usage?.promptTokenCount || 0;
+  const outTok = (usage?.candidatesTokenCount || 0) + (usage?.thoughtsTokenCount || 0);
+  return inTok * p.in + outTok * p.out;
+}
 
 const SESSION_KEY = "agentSession";
 
@@ -28,6 +43,7 @@ async function getConfig() {
     "blockedSites",
     "siteAccess",
     "allowedDomains",
+    "model",
   ]);
   return {
     backendUrl: (s.backendUrl || DEFAULTS.backendUrl).replace(/\/+$/, ""),
@@ -40,6 +56,7 @@ async function getConfig() {
       .filter(Boolean),
     siteAccess: s.siteAccess || DEFAULTS.siteAccess,
     allowedDomains: new Set(s.allowedDomains || []),
+    model: s.model || DEFAULTS.model,
   };
 }
 
@@ -116,6 +133,28 @@ if (api.commands?.onCommand) {
       } else if (api.sidebarAction?.toggle) {
         await api.sidebarAction.toggle();
       }
+    } catch (_) {}
+  });
+}
+
+// Right-click → "Ask Glide about selection"
+if (api.contextMenus?.create) {
+  api.runtime.onInstalled.addListener(() => {
+    try {
+      api.contextMenus.create({
+        id: "ask-glide",
+        title: 'Ask Glide about "%s"',
+        contexts: ["selection"],
+      });
+    } catch (_) {}
+  });
+  api.contextMenus.onClicked.addListener(async (info, tab) => {
+    if (info.menuItemId !== "ask-glide") return;
+    const text = info.selectionText || "";
+    await api.storage.local.set({ pendingAsk: `About this selection:\n"""${text}"""\n\n` });
+    try {
+      if (api.sidePanel?.open) await api.sidePanel.open({ tabId: tab?.id });
+      else if (api.sidebarAction?.open) await api.sidebarAction.open();
     } catch (_) {}
   });
 }
@@ -589,17 +628,26 @@ function siteIsBlocked(host, blockedSites) {
 
 // ---- backend call -----------------------------------------------------------
 
-async function callBackend(backendUrl, contents) {
-  const resp = await fetch(`${backendUrl}/api/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ contents }),
-  });
-  if (!resp.ok) {
-    const body = await resp.text().catch(() => "");
-    throw new Error(`Backend ${resp.status}: ${body.slice(0, 300)}`);
+async function callBackend(backendUrl, contents, model, attempts = 3) {
+  let lastErr = "";
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      const resp = await fetch(`${backendUrl}/api/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contents, model }),
+      });
+      if (resp.ok) return resp.json();
+      const body = await resp.text().catch(() => "");
+      lastErr = `Backend ${resp.status}: ${body.slice(0, 300)}`;
+      // retry only on transient server/rate errors
+      if (resp.status !== 429 && resp.status < 500) throw new Error(lastErr);
+    } catch (err) {
+      lastErr = String(err?.message || err);
+    }
+    if (i < attempts) await delay(500 * Math.pow(2, i - 1));
   }
-  return resp.json();
+  throw new Error(lastErr || "Backend request failed");
 }
 
 // ---- persistence (strip images to keep storage small) -----------------------
@@ -630,6 +678,7 @@ api.runtime.onConnect.addListener((port) => {
   let busy = false;
   let interrupted = false;
   let sessionTokens = 0;
+  let sessionCost = 0;
   const pending = new Map(); // id -> resolver (confirm / plan / ask)
   let seq = 0;
   const ctx = { tabId: null };
@@ -669,8 +718,19 @@ api.runtime.onConnect.addListener((port) => {
     if (msg?.type === "reset") {
       contents = [];
       sessionTokens = 0;
+      sessionCost = 0;
       await api.storage.local.remove([SESSION_KEY]);
       send({ type: "reset_done" });
+      return;
+    }
+    if (msg?.type === "pick_element") {
+      try {
+        const active = await getActiveTab();
+        const res = await sendToTab(active.id, { type: "pick_start" });
+        send({ type: "picked", ok: res?.ok, desc: res?.desc, label: res?.label, kind: res?.kind });
+      } catch (err) {
+        send({ type: "picked", ok: false, error: String(err?.message || err) });
+      }
       return;
     }
     if (msg?.type === "user_message") {
@@ -726,7 +786,7 @@ api.runtime.onConnect.addListener((port) => {
 
         let data;
         try {
-          data = await callBackend(config.backendUrl, contents);
+          data = await callBackend(config.backendUrl, contents, config.model);
         } catch (err) {
           send({ type: "error", text: `Could not reach the backend at ${config.backendUrl}. Is it running? (cd backend && npm start)\n\n${String(err.message || err)}` });
           return;
@@ -734,7 +794,8 @@ api.runtime.onConnect.addListener((port) => {
 
         if (data?.usage?.totalTokenCount) {
           sessionTokens += data.usage.totalTokenCount;
-          send({ type: "usage", total: sessionTokens });
+          sessionCost += estimateCost(data.model || config.model, data.usage);
+          send({ type: "usage", total: sessionTokens, cost: sessionCost });
         }
 
         const parts = data?.parts || [];

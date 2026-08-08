@@ -371,17 +371,49 @@ const TOOLS = [
 const GEMINI_URL = (model) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
+const ALLOWED_MODELS = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-2.5-flash-lite"];
+function resolveModel(requested) {
+  return ALLOWED_MODELS.includes(requested) ? requested : GEMINI_MODEL;
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Call Gemini with retry/backoff on transient errors (429 / 5xx / network).
+async function callGemini(model, payload, maxAttempts = 3) {
+  let lastErr = "";
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const resp = await fetch(GEMINI_URL(model), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
+        body: JSON.stringify(payload),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (resp.ok) return { ok: true, data };
+      const retryable = resp.status === 429 || resp.status >= 500;
+      lastErr = data?.error?.message || `Gemini API error ${resp.status}`;
+      if (!retryable || attempt === maxAttempts) return { ok: false, status: resp.status, error: lastErr };
+    } catch (err) {
+      lastErr = String(err?.message || err);
+      if (attempt === maxAttempts) return { ok: false, status: 502, error: `Failed to reach Gemini: ${lastErr}` };
+    }
+    await sleep(400 * Math.pow(2, attempt - 1)); // 400ms, 800ms, ...
+  }
+  return { ok: false, status: 502, error: lastErr };
+}
+
 // ---- routes -----------------------------------------------------------------
 
 app.get("/health", (_req, res) => {
-  res.json({ ok: true, model: GEMINI_MODEL });
+  res.json({ ok: true, model: GEMINI_MODEL, models: ALLOWED_MODELS });
 });
 
 app.post("/api/chat", async (req, res) => {
-  const { contents } = req.body || {};
+  const { contents, model: requestedModel } = req.body || {};
   if (!Array.isArray(contents) || contents.length === 0) {
     return res.status(400).json({ error: "Body must include a non-empty `contents` array." });
   }
+  const model = resolveModel(requestedModel);
 
   const payload = {
     system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
@@ -394,44 +426,31 @@ app.post("/api/chat", async (req, res) => {
     },
   };
 
-  try {
-    const resp = await fetch(GEMINI_URL(GEMINI_MODEL), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": GEMINI_API_KEY,
-      },
-      body: JSON.stringify(payload),
-    });
-
-    const data = await resp.json();
-
-    if (!resp.ok) {
-      const message = data?.error?.message || `Gemini API error ${resp.status}`;
-      console.error("Gemini error:", message);
-      return res.status(resp.status).json({ error: message });
-    }
-
-    const candidate = data?.candidates?.[0];
-    const parts = candidate?.content?.parts || [];
-
-    if (parts.length === 0) {
-      const reason = candidate?.finishReason || "unknown";
-      return res.json({
-        parts: [{ text: `(The model returned no content. Finish reason: ${reason}.)` }],
-        finishReason: reason,
-      });
-    }
-
-    return res.json({
-      parts,
-      finishReason: candidate?.finishReason,
-      usage: data?.usageMetadata,
-    });
-  } catch (err) {
-    console.error("Proxy error:", err);
-    return res.status(502).json({ error: `Failed to reach Gemini: ${String(err?.message || err)}` });
+  const result = await callGemini(model, payload);
+  if (!result.ok) {
+    console.error("Gemini error:", result.error);
+    return res.status(result.status || 502).json({ error: result.error });
   }
+
+  const data = result.data;
+  const candidate = data?.candidates?.[0];
+  const parts = candidate?.content?.parts || [];
+
+  if (parts.length === 0) {
+    const reason = candidate?.finishReason || "unknown";
+    return res.json({
+      parts: [{ text: `(The model returned no content. Finish reason: ${reason}.)` }],
+      finishReason: reason,
+      model,
+    });
+  }
+
+  return res.json({
+    parts,
+    finishReason: candidate?.finishReason,
+    usage: data?.usageMetadata,
+    model,
+  });
 });
 
 app.listen(PORT, () => {

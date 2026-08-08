@@ -12,11 +12,18 @@ const els = {
   newChat: document.getElementById("newChat"),
   openOptions: document.getElementById("openOptions"),
   usage: document.getElementById("usage"),
-  modelBadge: document.getElementById("modelBadge"),
+  modelSelect: document.getElementById("modelSelect"),
   saveSkill: document.getElementById("saveSkill"),
   schedule: document.getElementById("schedule"),
+  exportChat: document.getElementById("exportChat"),
+  pick: document.getElementById("pick"),
   skillsBar: document.getElementById("skillsBar"),
   confirmMode: document.getElementById("confirmMode"),
+  onboarding: document.getElementById("onboarding"),
+  obBackend: document.getElementById("obBackend"),
+  obTest: document.getElementById("obTest"),
+  obStatus: document.getElementById("obStatus"),
+  obDone: document.getElementById("obDone"),
 };
 
 let port = null;
@@ -67,12 +74,115 @@ function clearWelcome() {
 function scrollToBottom() {
   els.messages.scrollTop = els.messages.scrollHeight;
 }
+function escapeHtml(s) {
+  const d = document.createElement("div");
+  d.textContent = s;
+  return d.innerHTML;
+}
+// inline formatting on already-escaped text
+function inlineMd(s) {
+  s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
+  s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  s = s.replace(/(^|[^*])\*([^*\s][^*]*?)\*/g, "$1<em>$2</em>");
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  return s;
+}
 function formatText(text) {
-  const div = document.createElement("div");
-  div.textContent = text;
-  let html = div.innerHTML;
-  html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
-  html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  return inlineMd(escapeHtml(text));
+}
+function splitRow(l) {
+  return l.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((s) => s.trim());
+}
+function isTableSep(l) {
+  return /-/.test(l) && /^\s*\|?[\s:\-|]+\|?\s*$/.test(l);
+}
+function renderMarkdown(md) {
+  const lines = String(md).replace(/\r/g, "").split("\n");
+  let html = "";
+  let i = 0;
+  let inList = null;
+  const closeList = () => {
+    if (inList) {
+      html += `</${inList}>`;
+      inList = null;
+    }
+  };
+  while (i < lines.length) {
+    const line = lines[i];
+    if (/^```/.test(line)) {
+      i++;
+      let code = "";
+      while (i < lines.length && !/^```/.test(lines[i])) code += lines[i++] + "\n";
+      i++;
+      closeList();
+      html += `<pre><code>${escapeHtml(code.replace(/\n$/, ""))}</code></pre>`;
+      continue;
+    }
+    if (line.includes("|") && i + 1 < lines.length && isTableSep(lines[i + 1])) {
+      const header = splitRow(line);
+      i += 2;
+      const rows = [];
+      while (i < lines.length && lines[i].includes("|") && lines[i].trim() !== "") rows.push(splitRow(lines[i++]));
+      closeList();
+      html +=
+        "<table><thead><tr>" +
+        header.map((c) => `<th>${inlineMd(escapeHtml(c))}</th>`).join("") +
+        "</tr></thead><tbody>" +
+        rows.map((r) => "<tr>" + r.map((c) => `<td>${inlineMd(escapeHtml(c))}</td>`).join("") + "</tr>").join("") +
+        "</tbody></table>";
+      continue;
+    }
+    const h = line.match(/^(#{1,4})\s+(.*)$/);
+    if (h) {
+      closeList();
+      html += `<h${h[1].length}>${inlineMd(escapeHtml(h[2]))}</h${h[1].length}>`;
+      i++;
+      continue;
+    }
+    if (/^\s*(---|\*\*\*|___)\s*$/.test(line)) {
+      closeList();
+      html += "<hr>";
+      i++;
+      continue;
+    }
+    if (/^\s*>\s?/.test(line)) {
+      closeList();
+      html += `<blockquote>${inlineMd(escapeHtml(line.replace(/^\s*>\s?/, "")))}</blockquote>`;
+      i++;
+      continue;
+    }
+    const ul = line.match(/^\s*[-*]\s+(.*)$/);
+    if (ul) {
+      if (inList !== "ul") {
+        closeList();
+        html += "<ul>";
+        inList = "ul";
+      }
+      html += `<li>${inlineMd(escapeHtml(ul[1]))}</li>`;
+      i++;
+      continue;
+    }
+    const ol = line.match(/^\s*\d+\.\s+(.*)$/);
+    if (ol) {
+      if (inList !== "ol") {
+        closeList();
+        html += "<ol>";
+        inList = "ol";
+      }
+      html += `<li>${inlineMd(escapeHtml(ol[1]))}</li>`;
+      i++;
+      continue;
+    }
+    if (/^\s*$/.test(line)) {
+      closeList();
+      i++;
+      continue;
+    }
+    closeList();
+    html += `<p>${inlineMd(escapeHtml(line))}</p>`;
+    i++;
+  }
+  closeList();
   return html;
 }
 
@@ -82,17 +192,43 @@ function renderMessage(role, text) {
   msg.className = `msg ${role}`;
   const bubble = document.createElement("div");
   bubble.className = "bubble";
-  bubble.innerHTML = formatText(text);
+  bubble.innerHTML = role === "assistant" ? renderMarkdown(text) : formatText(text);
   msg.appendChild(bubble);
   els.messages.appendChild(msg);
   scrollToBottom();
-  return msg;
+  return { msg, bubble };
+}
+// typewriter reveal, then swap in rich markdown
+function typewrite(bubble, text) {
+  let i = 0;
+  const step = Math.max(2, Math.round(text.length / 140));
+  const tick = () => {
+    i += step;
+    bubble.textContent = text.slice(0, i);
+    scrollToBottom();
+    if (i < text.length) setTimeout(tick, 12);
+    else {
+      bubble.innerHTML = renderMarkdown(text);
+      scrollToBottom();
+    }
+  };
+  tick();
 }
 function addMessage(role, text) {
-  const el = renderMessage(role, text);
   transcript.push({ t: role, text });
   saveTranscript();
-  return el;
+  if (role === "assistant" && text) {
+    clearWelcome();
+    const msg = document.createElement("div");
+    msg.className = "msg assistant";
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    msg.appendChild(bubble);
+    els.messages.appendChild(msg);
+    typewrite(bubble, text);
+    return msg;
+  }
+  return renderMessage(role, text).msg;
 }
 
 function prettyArgs(args) {
@@ -292,10 +428,11 @@ function setBusy(v) {
     els.input.focus();
   }
 }
-function setUsage(total) {
+function setUsage(total, cost) {
   if (!total) return;
   els.usage.hidden = false;
-  els.usage.textContent = `${total.toLocaleString()} tok`;
+  const c = cost ? ` · $${cost < 0.01 ? cost.toFixed(4) : cost.toFixed(3)}` : "";
+  els.usage.textContent = `${total.toLocaleString()} tok${c}`;
 }
 
 // ---- port messages ----------------------------------------------------------
@@ -328,7 +465,15 @@ function onPortMessage(msg) {
       setActivityResult(msg.result, msg.thumb);
       break;
     case "usage":
-      setUsage(msg.total);
+      setUsage(msg.total, msg.cost);
+      break;
+    case "picked":
+      if (msg.ok) {
+        const ref = msg.label ? `the "${msg.label}" ${msg.kind || "element"}` : msg.desc;
+        els.input.value = (els.input.value ? els.input.value + " " : "") + `Click ${ref}`;
+        autoResize();
+        els.input.focus();
+      }
       break;
     case "assistant_interim":
       if (msg.text) addMessage("assistant", msg.text);
@@ -406,19 +551,28 @@ els.confirmMode.addEventListener("change", () => {
 
 // ---- model badge (from backend /health) -------------------------------------
 
-async function loadModelBadge() {
+async function backendBase() {
   const s = await api.storage.local.get(["backendUrl"]);
-  const url = (s.backendUrl || "http://localhost:8787").replace(/\/+$/, "");
-  try {
-    const r = await fetch(`${url}/health`);
-    const j = await r.json();
-    if (j.model) {
-      const span = els.modelBadge.querySelector("span");
-      if (span) span.textContent = j.model;
-      els.modelBadge.hidden = false;
-    }
-  } catch (_) {}
+  return (s.backendUrl || "http://localhost:8787").replace(/\/+$/, "");
 }
+async function loadModels() {
+  const url = await backendBase();
+  const s = await api.storage.local.get(["model"]);
+  const chosen = s.model || "gemini-2.5-flash";
+  try {
+    const j = await (await fetch(`${url}/health`)).json();
+    const models = j.models && j.models.length ? j.models : [j.model || "gemini-2.5-flash"];
+    els.modelSelect.innerHTML = models.map((m) => `<option value="${m}">${m.replace("gemini-", "")}</option>`).join("");
+    els.modelSelect.value = models.includes(chosen) ? chosen : models[0];
+    els.modelSelect.hidden = false;
+    return true;
+  } catch (_) {
+    return false; // backend not reachable
+  }
+}
+els.modelSelect.addEventListener("change", () => {
+  api.storage.local.set({ model: els.modelSelect.value });
+});
 
 // ---- skills (saved prompt macros) -------------------------------------------
 
@@ -536,12 +690,88 @@ els.schedule.addEventListener("click", async () => {
   });
 })();
 
+// ---- element picker ---------------------------------------------------------
+
+els.pick.addEventListener("click", () => {
+  setStatus("Pick an element on the page…");
+  ensurePort().postMessage({ type: "pick_element" });
+});
+
+// ---- export chat ------------------------------------------------------------
+
+els.exportChat.addEventListener("click", () => {
+  if (!transcript.length) {
+    alert("Nothing to export yet.");
+    return;
+  }
+  const lines = [`# Glide chat — ${new Date().toLocaleString()}`, ""];
+  for (const it of transcript) {
+    if (it.t === "user") lines.push(`## 🧑 You`, "", it.text, "");
+    else if (it.t === "assistant") lines.push(`## ✦ Glide`, "", it.text, "");
+    else if (it.t === "error") lines.push(`> ⚠️ ${it.text}`, "");
+    else if (it.t === "tool") lines.push(`- 🔧 ${TOOL_LABELS[it.name] || it.name} ${it.result ? "— " + it.result.split("\n")[0] : ""}`);
+  }
+  const blob = new Blob([lines.join("\n")], { type: "text/markdown" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `glide-chat-${Date.now()}.md`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+
+// ---- onboarding -------------------------------------------------------------
+
+async function maybeOnboard() {
+  const s = await api.storage.local.get(["onboarded", "backendUrl"]);
+  els.obBackend.value = s.backendUrl || "http://localhost:8787";
+  const reachable = await loadModels();
+  if (!s.onboarded && !reachable) {
+    els.onboarding.hidden = false;
+  }
+}
+els.obTest.addEventListener("click", async () => {
+  const url = els.obBackend.value.trim().replace(/\/+$/, "");
+  els.obStatus.textContent = "Testing…";
+  els.obStatus.className = "ob-status";
+  try {
+    const j = await (await fetch(`${url}/health`)).json();
+    if (j.ok) {
+      els.obStatus.textContent = `✓ Connected (${j.model})`;
+      els.obStatus.className = "ob-status ok";
+      await api.storage.local.set({ backendUrl: url });
+    } else throw new Error("bad response");
+  } catch (_) {
+    els.obStatus.textContent = "✕ Not reachable — is the backend running?";
+    els.obStatus.className = "ob-status err";
+  }
+});
+els.obDone.addEventListener("click", async () => {
+  const url = els.obBackend.value.trim().replace(/\/+$/, "");
+  await api.storage.local.set({ backendUrl: url, onboarded: true });
+  els.onboarding.hidden = true;
+  loadModels();
+});
+
+// ---- context-menu prefill ("Ask Glide about selection") ---------------------
+
+async function loadPendingAsk() {
+  const s = await api.storage.local.get(["pendingAsk"]);
+  if (s.pendingAsk) {
+    els.input.value = s.pendingAsk;
+    autoResize();
+    await api.storage.local.remove(["pendingAsk"]);
+    els.input.focus();
+  }
+}
+
 // ---- init -------------------------------------------------------------------
 
 connect();
 setBusy(false);
 restoreTranscript();
 loadConfirmMode();
-loadModelBadge();
 renderSkills();
+maybeOnboard();
+loadPendingAsk();
 els.input.focus();

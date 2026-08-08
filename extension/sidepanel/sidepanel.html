@@ -20,8 +20,9 @@
         <span class="brand-name">Glide</span>
       </div>
       <div class="topbar-actions">
-        <button id="modelBadge" class="model-badge" hidden><span></span> ▾</button>
-        <span id="usage" class="usage" title="Tokens used this session" hidden></span>
+        <select id="modelSelect" class="model-badge" title="Model" hidden></select>
+        <span id="usage" class="usage" title="Tokens &amp; approx cost this session" hidden></span>
+        <button id="exportChat" class="icon-btn" title="Export this chat">📤</button>
         <button id="saveSkill" class="icon-btn" title="Save last request as a skill">⚡</button>
         <button id="schedule" class="icon-btn" title="Schedule a saved skill">⏰</button>
         <button id="newChat" class="icon-btn" title="New chat">＋</button>
@@ -66,6 +67,7 @@
     <footer class="composer">
       <div class="composer-box">
         <button id="mic" class="mic-btn" title="Dictate (voice)">🎤</button>
+        <button id="pick" class="mic-btn" title="Pick an element on the page">🎯</button>
         <textarea id="input" rows="1" placeholder="Ask the agent to do anything…" autocomplete="off"></textarea>
         <button id="send" class="send-btn" title="Send">➤</button>
       </div>
@@ -81,6 +83,31 @@
         <span class="disclaimer">Gemini can make mistakes — double-check important actions.</span>
       </div>
     </footer>
+
+    <!-- First-run onboarding -->
+    <div id="onboarding" class="onboarding" hidden>
+      <div class="ob-card">
+        <div class="ob-logo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 12h11" /><path d="M13 7l5 5-5 5" /><path d="M3 8h3" opacity="0.6" /><path d="M3 16h3" opacity="0.6" />
+          </svg>
+        </div>
+        <h2>Welcome to Glide</h2>
+        <p>Glide needs your local backend running (it safely holds your Gemini API key).</p>
+        <ol class="ob-steps">
+          <li>Get a free key at <b>aistudio.google.com/apikey</b></li>
+          <li>In <code>backend/</code>: <code>npm install</code>, copy <code>.env.example</code> → <code>.env</code>, paste your key</li>
+          <li>Run <code>npm start</code> (starts <code>localhost:8787</code>)</li>
+        </ol>
+        <label class="ob-label">Backend URL</label>
+        <input id="obBackend" type="text" value="http://localhost:8787" />
+        <div class="ob-actions">
+          <button id="obTest" class="ob-test">Test connection</button>
+          <span id="obStatus" class="ob-status"></span>
+        </div>
+        <button id="obDone" class="ob-done">Start using Glide →</button>
+      </div>
+    </div>
 
     <script src="sidepanel.js"></script>
   </body>

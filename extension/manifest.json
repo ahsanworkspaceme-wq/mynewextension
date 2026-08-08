@@ -61,7 +61,8 @@
     "sidePanel",
     "downloads",
     "alarms",
-    "notifications"
+    "notifications",
+    "contextMenus"
   ],
   "optional_permissions": ["debugger"],
   "host_permissions": ["<all_urls>"],

@@ -435,6 +435,71 @@
     return { ok: true, message: `Scrolled ${direction} by ${Math.abs(dy)}px (now at y=${Math.round(window.scrollY)})` };
   }
 
+  // ---- element picker (point-to-target) -------------------------------------
+
+  function startPick(sendResponse) {
+    const box = document.createElement("div");
+    Object.assign(box.style, {
+      position: "fixed",
+      border: "2px solid #8b6dff",
+      background: "rgba(139,109,255,0.15)",
+      borderRadius: "3px",
+      zIndex: "2147483647",
+      pointerEvents: "none",
+      transition: "all 0.05s",
+    });
+    const banner = document.createElement("div");
+    banner.textContent = "🖐️ Click an element to pick it · Esc to cancel";
+    Object.assign(banner.style, {
+      position: "fixed",
+      top: "12px",
+      left: "50%",
+      transform: "translateX(-50%)",
+      background: "#14161e",
+      color: "#edeef3",
+      padding: "7px 14px",
+      borderRadius: "10px",
+      font: "13px -apple-system, sans-serif",
+      zIndex: "2147483647",
+      pointerEvents: "none",
+      boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
+    });
+    document.documentElement.append(box, banner);
+
+    let current = null;
+    const onMove = (e) => {
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      if (!el || el === box) return;
+      current = el;
+      const r = el.getBoundingClientRect();
+      Object.assign(box.style, { left: r.left + "px", top: r.top + "px", width: r.width + "px", height: r.height + "px" });
+    };
+    const cleanup = () => {
+      window.removeEventListener("mousemove", onMove, true);
+      window.removeEventListener("click", onClick, true);
+      window.removeEventListener("keydown", onKey, true);
+      box.remove();
+      banner.remove();
+    };
+    const onClick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const el = current || document.elementFromPoint(e.clientX, e.clientY);
+      cleanup();
+      if (!el) return sendResponse({ ok: false });
+      sendResponse({ ok: true, desc: describe(el), label: clean(el.innerText || el.value || el.getAttribute("aria-label") || ""), kind: el.tagName.toLowerCase() });
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        cleanup();
+        sendResponse({ ok: false, cancelled: true });
+      }
+    };
+    window.addEventListener("mousemove", onMove, true);
+    window.addEventListener("click", onClick, true);
+    window.addEventListener("keydown", onKey, true);
+  }
+
   // ---- message router -------------------------------------------------------
 
   api.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
@@ -468,6 +533,9 @@
             break;
           case "get_extract":
             sendResponse({ ok: true, data: extractData() });
+            break;
+          case "pick_start":
+            startPick(sendResponse);
             break;
           case "scroll":
             sendResponse(doScroll(msg.direction || "down", msg.pixels));
