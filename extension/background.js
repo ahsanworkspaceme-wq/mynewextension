@@ -674,6 +674,26 @@ async function loadSession() {
   return Array.isArray(s[SESSION_KEY]) ? s[SESSION_KEY] : [];
 }
 
+// Keep the conversation valid for the model: every model functionCall must be
+// immediately followed by a user functionResponse. Drop orphaned response turns
+// and any trailing dangling functionCall turn (e.g. from an interrupted step),
+// which otherwise cause "function response must follow a function call" errors.
+function balanceContents(contents) {
+  const out = [];
+  for (const c of contents) {
+    const parts = c.parts || [];
+    if (c.role === "user" && parts.some((p) => p.functionResponse)) {
+      const prev = out[out.length - 1];
+      if (!prev || prev.role !== "model" || !(prev.parts || []).some((p) => p.functionCall)) continue;
+    }
+    out.push(c);
+  }
+  while (out.length && out[out.length - 1].role === "model" && (out[out.length - 1].parts || []).some((p) => p.functionCall)) {
+    out.pop();
+  }
+  return out;
+}
+
 // ---- agent loop (per side-panel connection) ---------------------------------
 
 api.runtime.onConnect.addListener((port) => {
@@ -767,6 +787,9 @@ api.runtime.onConnect.addListener((port) => {
       }
       ctx.tabId = active.id;
 
+      // Repair any dangling function-call/response from a previous interrupted turn.
+      contents = balanceContents(contents);
+
       // On a fresh conversation, seed long-term memory.
       const isFirst = contents.length === 0;
       const memParts = [];
@@ -794,7 +817,17 @@ api.runtime.onConnect.addListener((port) => {
         try {
           data = await callBackend(config.backendUrl, contents, config);
         } catch (err) {
-          send({ type: "error", text: `Could not reach the backend at ${config.backendUrl}. Is it running? (cd backend && npm start)\n\n${String(err.message || err)}` });
+          const m = String(err.message || err);
+          const httpMatch = m.match(/^Backend \d+:\s*([\s\S]*)$/);
+          if (httpMatch) {
+            let detail = httpMatch[1];
+            try {
+              detail = JSON.parse(detail).error || detail;
+            } catch (_) {}
+            send({ type: "error", text: `The AI returned an error:\n${detail}` });
+          } else {
+            send({ type: "error", text: `Could not reach the backend at ${config.backendUrl}. Is it running? (cd backend && npm start)\n\n${m}` });
+          }
           return;
         }
 
