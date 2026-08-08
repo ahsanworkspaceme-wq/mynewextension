@@ -166,18 +166,36 @@ function openaiTools(tools) {
     function: { name: d.name, description: d.description, parameters: toJsonSchema(d.parameters) || { type: "object", properties: {} } },
   }));
 }
+let openaiModelCache = null;
 async function openaiListModels(p) {
+  if (openaiModelCache) return openaiModelCache;
   try {
     const r = await fetch(`${p.base}/models`, { headers: authHeaders(p) });
     const d = await r.json();
     const ids = (d.data || d.models || []).map((m) => m.id || m.name).filter(Boolean);
+    if (ids.length) openaiModelCache = ids;
     return ids;
   } catch (_) {
     return [];
   }
 }
+// Prefer a known tool + vision capable model so the agent's actions work.
+function openaiPick(models, prefer) {
+  if (prefer && models.includes(prefer)) return prefer;
+  const preferred = [
+    "openai/gpt-4o-mini",
+    "google/gemini-2.0-flash-001",
+    "google/gemini-flash-1.5",
+    "anthropic/claude-3.5-sonnet",
+    "openai/gpt-4o",
+    "gpt-4o-mini",
+  ];
+  for (const m of preferred) if (models.includes(m)) return m;
+  return models.find((m) => /gpt-4o-mini|gemini.*flash|claude-3\.5|claude-3-5/i.test(m)) || models[0];
+}
 async function openaiChat(p, { contents, model, systemPrompt, tools }) {
-  const useModel = model || p.model;
+  const models = await openaiListModels(p);
+  const useModel = models.length ? openaiPick(models, model || p.model) : model || p.model;
   const body = {
     model: useModel,
     messages: toOpenAIMessages(contents, systemPrompt),
@@ -331,5 +349,6 @@ export async function defaultModel() {
   if (!models.length) return p.model;
   if (models.includes(p.model)) return p.model;
   if (p.kind === "gemini") return geminiPick(models, p.model);
+  if (p.kind === "openai") return openaiPick(models, p.model);
   return models[0];
 }
