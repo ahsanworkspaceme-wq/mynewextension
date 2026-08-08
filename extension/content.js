@@ -357,6 +357,10 @@
           case "type_at":
             sendResponse(await doTypeAt(msg.x, msg.y, msg.text ?? "", !!msg.submit));
             break;
+          case "highlight_at":
+            highlightPoint(msg.x, msg.y);
+            sendResponse({ ok: true });
+            break;
           case "scroll":
             sendResponse(doScroll(msg.direction || "down", msg.pixels));
             break;

@@ -106,6 +106,34 @@
     </select>
     <div class="hint">Choose when the agent should ask you before it acts on the page.</div>
 
+    <label for="siteAccess">Per-site access</label>
+    <select
+      id="siteAccess"
+      style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid #8884; background: transparent; color: inherit; font-size: 14px;"
+    >
+      <option value="all">Act on any site (except blocked)</option>
+      <option value="ask">Ask before acting on each new site (remembered per site)</option>
+    </select>
+    <div class="hint">Control which sites the agent may act on.</div>
+
+    <label for="blockedSites">Blocked sites</label>
+    <input id="blockedSites" type="text" placeholder="chase.com, paypal.com, coinbase.com" />
+    <div class="hint">
+      Comma-separated. The agent will refuse to take actions on any site whose
+      hostname contains one of these (e.g. banking).
+    </div>
+
+    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+      <input id="nativeInput" type="checkbox" style="width: auto;" />
+      Power mode: OS-level input (Chrome only)
+    </label>
+    <div class="hint">
+      Uses Chrome's debugger API for real mouse/keyboard events — enables clicking
+      inside <strong>cross-origin iframes</strong> and more robust input. Chrome shows a
+      "started debugging this browser" banner while active. Requires granting the
+      <code>debugger</code> permission when you enable it.
+    </div>
+
     <div>
       <button id="save">Save</button>
       <span id="saved">✓ Saved</span>

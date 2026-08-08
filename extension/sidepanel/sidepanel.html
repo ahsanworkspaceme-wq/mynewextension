@@ -31,13 +31,18 @@
       </div>
     </main>
 
-    <div id="statusBar" class="status-bar" hidden></div>
+    <div id="statusBar" class="status-bar" hidden>
+      <span class="dot"></span>
+      <span id="statusText"></span>
+      <button id="stop" class="stop-btn" title="Stop">■ Stop</button>
+    </div>
 
     <footer class="composer">
+      <button id="mic" class="icon-btn mic-btn" title="Dictate (voice)">🎤</button>
       <textarea
         id="input"
         rows="1"
-        placeholder="Ask the agent to do something on this page…"
+        placeholder="Ask the agent to do something…"
         autocomplete="off"
       ></textarea>
       <button id="send" class="send-btn" title="Send">➤</button>

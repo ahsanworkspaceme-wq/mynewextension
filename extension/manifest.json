@@ -44,13 +44,24 @@
     "page": "options.html",
     "open_in_tab": true
   },
+  "commands": {
+    "open_panel": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+K",
+        "mac": "Command+Shift+K"
+      },
+      "description": "Open the Gemini Agent side panel"
+    }
+  },
   "permissions": [
     "activeTab",
     "tabs",
     "scripting",
     "storage",
-    "sidePanel"
+    "sidePanel",
+    "downloads"
   ],
+  "optional_permissions": ["debugger"],
   "host_permissions": ["<all_urls>"],
   "browser_specific_settings": {
     "gecko": {

@@ -33,6 +33,19 @@ extension, so your key stays secure.
   submitting forms) or before every action. Configurable.
 - ✨ **Visual highlight** — flashes the element (or the exact spot) it's about to
   interact with, so you can watch what it does.
+- 🗂️ **Multi-tab** — opens new tabs and switches between them to research across
+  several sites and compile the results (`list_tabs`, `open_tab`, `switch_tab`, `close_tab`).
+- ⚡ **Power mode (Chrome)** — optional OS-level mouse/keyboard input via the
+  debugger API, which also enables clicking inside **cross-origin iframes**.
+- 🚫 **Blocked & per-site access** — refuses to act on sensitive sites (banking,
+  etc.) and can ask for approval before acting on each new site.
+- 🛡️ **Prompt-injection defense** — page text is delimited as untrusted data and
+  the model is instructed never to obey instructions found in page content.
+- ⬇️ **Downloads** — can download files; opens the OS file chooser for uploads.
+- ⏹️ **Stop button** — interrupt a running task at any time.
+- 💾 **Conversation persists** — the chat survives closing/reopening the panel.
+- 🎤 **Voice input** — dictate your request (Chrome Web Speech API).
+- ⌨️ **Keyboard shortcut** — `Ctrl/Cmd + Shift + K` opens the side panel.
 - 🔁 **Agentic loop** — it takes one step, re-reads the page (or re-screenshots),
   and continues until the task is done (bounded by a max-steps safety limit).
 - 🔒 **Key stays on the backend** — the extension only talks to your server.
@@ -120,6 +133,27 @@ in the extension's **Settings** (⚙ icon in the side panel).
 - **Max agent steps** — safety cap on actions per request.
 - **Confirm before actions** — `Never`, `Risky only` (default: ask before
   navigating & submitting), or `Every action`.
+- **Per-site access** — act on any site, or ask before each new site (remembered).
+- **Blocked sites** — comma-separated hostnames the agent will refuse to act on.
+- **Power mode (Chrome only)** — OS-level input via the debugger API; enables
+  cross-origin iframe clicks. Grants the `debugger` permission on enable and shows
+  Chrome's debugging banner while active.
+
+### Extras
+
+- **Keyboard shortcut:** `Ctrl+Shift+K` (macOS `Cmd+Shift+K`) opens the panel.
+- **Voice:** click 🎤 to dictate (Chrome).
+- **Stop:** click ■ Stop to interrupt a running task.
+- **Persistence:** your conversation is saved; "＋ New chat" clears it.
+
+### Honest limitations
+
+- **Cross-origin iframes** only work in **Power mode** (Chrome debugger). Without
+  it, only same-origin iframes are actionable — a browser security boundary.
+- **File upload** can't be automated for security; the agent opens the OS file
+  picker and you choose the file.
+- Advanced features (power mode, side panel, voice) are **Chrome/Edge**-first;
+  Firefox supports the core agent but not the debugger API or Web Speech.
 
 ## Project structure
 
