@@ -5,7 +5,7 @@
 import { existsSync, readFileSync, writeFileSync, copyFileSync } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
 import { createInterface } from "node:readline/promises";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -17,9 +17,9 @@ const run = (cmd, args, cwd) => spawnSync(cmd, args, { cwd, stdio: "inherit", sh
 
 log("\n➤  Glide setup\n────────────────");
 
-// 1. Generate icons
+// 1. Generate icons (import runs it in-process — avoids Windows path-with-spaces issues)
 log("\n[1/4] Generating icons…");
-run(process.execPath, [join(ROOT, "scripts", "gen-icons.mjs")], ROOT);
+await import(pathToFileURL(join(ROOT, "scripts", "gen-icons.mjs")).href);
 
 // 2. Install backend deps (only if missing)
 if (!existsSync(join(BACKEND, "node_modules"))) {
