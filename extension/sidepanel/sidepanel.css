@@ -33,6 +33,12 @@
 * {
   box-sizing: border-box;
 }
+/* Ensure the [hidden] attribute always wins over custom display rules
+   (.onboarding/.working-bar/.skills-bar set display, which would otherwise
+   override the UA [hidden] { display:none }). */
+[hidden] {
+  display: none !important;
+}
 html,
 body {
   margin: 0;
