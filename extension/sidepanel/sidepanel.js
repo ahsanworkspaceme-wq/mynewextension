@@ -5,7 +5,7 @@ const els = {
   messages: document.getElementById("messages"),
   input: document.getElementById("input"),
   send: document.getElementById("send"),
-  status: document.getElementById("statusBar"),
+  status: document.getElementById("workingBar"),
   statusText: document.getElementById("statusText"),
   stop: document.getElementById("stop"),
   mic: document.getElementById("mic"),
@@ -287,7 +287,6 @@ function setStatus(text) {
 function setBusy(v) {
   busy = v;
   els.send.disabled = v;
-  els.stop.style.display = v ? "" : "none";
   if (!v) {
     setStatus("");
     els.input.focus();
@@ -414,7 +413,8 @@ async function loadModelBadge() {
     const r = await fetch(`${url}/health`);
     const j = await r.json();
     if (j.model) {
-      els.modelBadge.textContent = j.model;
+      const span = els.modelBadge.querySelector("span");
+      if (span) span.textContent = j.model;
       els.modelBadge.hidden = false;
     }
   } catch (_) {}

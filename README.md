@@ -68,6 +68,8 @@ extension, so your key stays secure.
 
 ## Quick start
 
+> 📘 **New here? Follow the [complete step-by-step install guide → INSTALL.md](INSTALL.md).**
+
 ### 1. Run the backend
 
 ```bash

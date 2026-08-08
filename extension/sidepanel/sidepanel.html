@@ -10,12 +10,10 @@
     <header class="topbar">
       <div class="brand">
         <span class="logo">✦</span>
-        <div class="brand-text">
-          <span class="brand-name">Gemini Agent</span>
-          <span id="modelBadge" class="model-badge" hidden></span>
-        </div>
+        <span class="brand-name">Gemini&nbsp;Agent</span>
       </div>
       <div class="topbar-actions">
+        <button id="modelBadge" class="model-badge" hidden><span></span> ▾</button>
         <span id="usage" class="usage" title="Tokens used this session" hidden></span>
         <button id="saveSkill" class="icon-btn" title="Save last request as a skill">⚡</button>
         <button id="schedule" class="icon-btn" title="Schedule a saved skill">⏰</button>
@@ -26,41 +24,47 @@
 
     <div id="skillsBar" class="skills-bar" hidden></div>
 
+    <div id="workingBar" class="working-bar" hidden>
+      <span class="work-spark">✦</span>
+      <span id="statusText" class="work-text">Working…</span>
+      <button id="stop" class="stop-btn">Stop</button>
+    </div>
+
     <main id="messages" class="messages">
       <div class="welcome">
         <div class="welcome-logo">✦</div>
         <h1>Gemini Agent</h1>
         <p>I can read this page, take actions for you, research across tabs, and more.</p>
         <div class="suggestions">
-          <button class="chip" data-prompt="Summarize this page in a few bullet points.">Summarize this page</button>
-          <button class="chip" data-prompt="Make a plan to complete a task on this site, then do it after I approve.">Plan &amp; do a task</button>
-          <button class="chip" data-prompt="Extract the key data on this page as a clean list.">Extract key data</button>
+          <button class="chip" data-prompt="Summarize this page in a few clear bullet points.">
+            <span class="chip-ic">📄</span> Summarize this page
+          </button>
+          <button class="chip" data-prompt="Make a plan to complete a task on this site, show it to me, then do it after I approve.">
+            <span class="chip-ic">🧠</span> Plan &amp; do a task
+          </button>
+          <button class="chip" data-prompt="Extract the key data on this page as a clean structured list.">
+            <span class="chip-ic">📊</span> Extract key data
+          </button>
         </div>
       </div>
     </main>
 
-    <div id="statusBar" class="status-bar" hidden>
-      <span class="spinner"></span>
-      <span id="statusText">Working…</span>
-      <button id="stop" class="stop-btn" title="Stop">Stop</button>
-    </div>
-
     <footer class="composer">
-      <div class="composer-row">
-        <button id="mic" class="icon-btn mic-btn" title="Dictate (voice)">🎤</button>
+      <div class="composer-box">
+        <button id="mic" class="mic-btn" title="Dictate (voice)">🎤</button>
         <textarea id="input" rows="1" placeholder="Ask the agent to do anything…" autocomplete="off"></textarea>
         <button id="send" class="send-btn" title="Send">➤</button>
       </div>
       <div class="composer-meta">
-        <label class="ask-select" title="When should the agent ask you before acting?">
+        <button class="ask-pill" id="askPill" title="When should the agent ask before acting?">
           <span class="ask-dot"></span>
           <select id="confirmMode">
-            <option value="risky">Ask before risky actions</option>
-            <option value="all">Ask before every action</option>
+            <option value="risky">Ask before acting</option>
+            <option value="all">Ask every step</option>
             <option value="off">Act freely</option>
           </select>
-        </label>
-        <span class="hint-key">Enter to send</span>
+        </button>
+        <span class="disclaimer">Gemini can make mistakes — double-check important actions.</span>
       </div>
     </footer>
 
