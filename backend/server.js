@@ -371,9 +371,42 @@ const TOOLS = [
 const GEMINI_URL = (model) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
-const ALLOWED_MODELS = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-2.5-flash-lite"];
-function resolveModel(requested) {
-  return ALLOWED_MODELS.includes(requested) ? requested : GEMINI_MODEL;
+// Discover which models this API key can actually use (adapts to Google's
+// current lineup, so we never hardcode a model that's been retired).
+let cachedModels = null;
+async function listModels() {
+  if (cachedModels) return cachedModels;
+  try {
+    const resp = await fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200", {
+      headers: { "x-goog-api-key": GEMINI_API_KEY },
+    });
+    const data = await resp.json();
+    const models = (data.models || [])
+      .filter((m) => (m.supportedGenerationMethods || []).includes("generateContent"))
+      .map((m) => m.name.replace(/^models\//, ""))
+      .filter((n) => /^gemini/.test(n) && !/embedding|aqa|image-generation/.test(n));
+    if (models.length) cachedModels = models;
+    return models;
+  } catch (_) {
+    return [];
+  }
+}
+function pickDefault(models) {
+  return (
+    models.find((m) => /flash-latest/.test(m)) ||
+    models.find((m) => /flash/.test(m) && /latest/.test(m)) ||
+    models.find((m) => /2\.5-flash$/.test(m)) ||
+    models.find((m) => /flash/.test(m)) ||
+    models.find((m) => /pro/.test(m)) ||
+    models[0]
+  );
+}
+async function resolveModel(requested) {
+  const models = await listModels();
+  if (!models.length) return requested || GEMINI_MODEL; // discovery failed — trust the request
+  if (requested && models.includes(requested)) return requested;
+  if (models.includes(GEMINI_MODEL)) return GEMINI_MODEL;
+  return pickDefault(models) || GEMINI_MODEL;
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -404,8 +437,10 @@ async function callGemini(model, payload, maxAttempts = 3) {
 
 // ---- routes -----------------------------------------------------------------
 
-app.get("/health", (_req, res) => {
-  res.json({ ok: true, model: GEMINI_MODEL, models: ALLOWED_MODELS });
+app.get("/health", async (_req, res) => {
+  const models = await listModels();
+  const model = models.length ? (models.includes(GEMINI_MODEL) ? GEMINI_MODEL : pickDefault(models)) : GEMINI_MODEL;
+  res.json({ ok: true, model, models });
 });
 
 app.post("/api/chat", async (req, res) => {
@@ -413,7 +448,7 @@ app.post("/api/chat", async (req, res) => {
   if (!Array.isArray(contents) || contents.length === 0) {
     return res.status(400).json({ error: "Body must include a non-empty `contents` array." });
   }
-  const model = resolveModel(requestedModel);
+  const model = await resolveModel(requestedModel);
 
   const payload = {
     system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
