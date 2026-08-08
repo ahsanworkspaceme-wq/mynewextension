@@ -1,4 +1,4 @@
-# Gemini Agent — Backend
+# Glide — Backend
 
 A tiny Express server that sits between the browser extension and the Gemini
 API. It holds your **Gemini API key** so the key is never shipped inside the
@@ -18,7 +18,7 @@ Get a free API key from **https://aistudio.google.com/apikey**.
 You should see:
 
 ```
-✦ Gemini Agent backend running on http://localhost:8787
+✦ Glide backend running on http://localhost:8787
 ```
 
 Test it:

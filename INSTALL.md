@@ -1,6 +1,6 @@
-# 📦 Gemini Agent — Complete Installation Guide
+# 📦 Glide — Complete Installation Guide
 
-A full, step-by-step guide to get the **Gemini Agent** browser extension running
+A full, step-by-step guide to get the **Glide** browser extension running
 from scratch — backend + extension — on Chrome/Edge or Firefox.
 
 > **Time needed:** ~10 minutes
@@ -76,7 +76,7 @@ npm start
 You should see:
 
 ```
-✦ Gemini Agent backend running on http://localhost:8787
+✦ Glide backend running on http://localhost:8787
   Model: gemini-2.5-flash
 ```
 
@@ -116,7 +116,7 @@ This creates `extension/icons/*.png`. (They're generated, not committed.)
 3. Click **Load unpacked**.
 4. Select the **`extension`** folder inside the project (the folder that contains
    `manifest.json`).
-5. The **Gemini Agent** card appears. Click its **✦ icon** in the toolbar to open
+5. The **Glide** card appears. Click its **✦ icon** in the toolbar to open
    the side panel. (If you don't see the icon, click the puzzle-piece 🧩 and pin it.)
 
 **Shortcut:** press `Ctrl + Shift + K` (macOS `Cmd + Shift + K`) to open the panel
@@ -127,7 +127,7 @@ anytime.
 1. Go to `about:debugging#/runtime/this-firefox`
 2. Click **Load Temporary Add-on…**
 3. Select `extension/manifest.json`
-4. Open the sidebar: **View → Sidebar → Gemini Agent**.
+4. Open the sidebar: **View → Sidebar → Glide**.
 
 > Firefox note: core chat + actions work. **Power mode** (debugger) and **voice**
 > are Chrome/Edge only.

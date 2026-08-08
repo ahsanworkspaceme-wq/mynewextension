@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Gemini Agent — AI Browser Assistant",
+  "name": "Glide — AI Browser Agent",
   "version": "1.0.0",
-  "description": "An agentic AI assistant that reads the current page and can click, type, scroll and navigate for you. Powered by Gemini via a secure backend.",
+  "description": "Glide is an agentic AI browser assistant that reads pages, plans tasks, and clicks, types, drags and navigates for you across tabs. Powered by Gemini via a secure backend.",
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",
@@ -10,7 +10,7 @@
     "128": "icons/icon-128.png"
   },
   "action": {
-    "default_title": "Open Gemini Agent",
+    "default_title": "Open Glide",
     "default_icon": {
       "16": "icons/icon-16.png",
       "32": "icons/icon-32.png"
@@ -33,7 +33,7 @@
     "default_path": "sidepanel/sidepanel.html"
   },
   "sidebar_action": {
-    "default_title": "Gemini Agent",
+    "default_title": "Glide",
     "default_panel": "sidepanel/sidepanel.html",
     "default_icon": {
       "16": "icons/icon-16.png",
@@ -50,7 +50,7 @@
         "default": "Ctrl+Shift+K",
         "mac": "Command+Shift+K"
       },
-      "description": "Open the Gemini Agent side panel"
+      "description": "Open the Glide side panel"
     }
   },
   "permissions": [
@@ -67,7 +67,7 @@
   "host_permissions": ["<all_urls>"],
   "browser_specific_settings": {
     "gecko": {
-      "id": "gemini-agent@mynewextension.local",
+      "id": "glide@mynewextension.local",
       "strict_min_version": "115.0"
     }
   }

@@ -87,7 +87,7 @@ if (api.alarms?.onAlarm) {
       api.notifications.create({
         type: "basic",
         iconUrl: api.runtime.getURL("icons/icon-128.png"),
-        title: "Gemini Agent — scheduled task",
+        title: "Glide — scheduled task",
         message: `"${sched.name}" is due. Open the side panel to run it.`,
       });
     }

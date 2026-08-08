@@ -202,7 +202,7 @@ function renderPlan(id, goal, steps) {
   card.className = "plan-card";
   const list = (steps || []).map((s, i) => `<li>${formatText(String(s))}</li>`).join("");
   card.innerHTML =
-    `<div class="plan-title">📋 Claude's plan${goal ? ": " + formatText(goal) : ""}</div>` +
+    `<div class="plan-title">📋 Glide's plan${goal ? ": " + formatText(goal) : ""}</div>` +
     `<ol class="plan-steps">${list}</ol>` +
     `<div class="plan-actions">` +
     `<button class="plan-approve">Approve plan</button>` +

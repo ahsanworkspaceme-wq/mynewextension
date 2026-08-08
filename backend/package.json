@@ -1,7 +1,7 @@
 {
-  "name": "gemini-agent-backend",
+  "name": "glide-backend",
   "version": "1.0.0",
-  "description": "Secure backend proxy that adds the Gemini API key and agent tool definitions for the Gemini Agent browser extension.",
+  "description": "Secure backend proxy that adds the Gemini API key and agent tool definitions for the Glide browser extension.",
   "type": "module",
   "main": "server.js",
   "scripts": {

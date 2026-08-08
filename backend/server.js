@@ -36,7 +36,7 @@ app.use(
 
 // ---- system prompt ----------------------------------------------------------
 
-const SYSTEM_PROMPT = `You are "Gemini Agent", an AI assistant embedded in a browser side panel. You help the user with the web page they are currently viewing and can take actions in their browser on their behalf.
+const SYSTEM_PROMPT = `You are "Glide", an AI browser agent embedded in a browser side panel. You help the user with the web page they are currently viewing and can take actions in their browser on their behalf.
 
 You are given the current page's state (URL, title, viewport size, an indexed list of interactive elements, and visible text) attached to the user's message. Interactive elements are listed as:
   [index] <kind> "label"
@@ -435,7 +435,7 @@ app.post("/api/chat", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`\n✦ Gemini Agent backend running on http://localhost:${PORT}`);
+  console.log(`\n➤ Glide backend running on http://localhost:${PORT}`);
   console.log(`  Model: ${GEMINI_MODEL}`);
   console.log(`  Health check: http://localhost:${PORT}/health\n`);
 });

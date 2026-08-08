@@ -72,8 +72,11 @@ body {
   border-radius: 8px;
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
   color: #fff;
-  font-size: 14px;
   box-shadow: 0 2px 8px rgba(139, 109, 255, 0.35);
+}
+.logo svg {
+  width: 16px;
+  height: 16px;
 }
 .brand-name {
   font-weight: 650;
@@ -225,11 +228,19 @@ body {
   max-width: 320px;
 }
 .welcome-logo {
-  font-size: 42px;
+  display: inline-grid;
+  place-items: center;
+  width: 62px;
+  height: 62px;
+  margin: 0 auto;
+  border-radius: 18px;
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(139, 109, 255, 0.4);
+}
+.welcome-logo svg {
+  width: 36px;
+  height: 36px;
 }
 .welcome h1 {
   font-size: 19px;

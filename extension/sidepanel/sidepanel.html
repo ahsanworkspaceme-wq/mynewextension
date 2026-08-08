@@ -3,14 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Gemini Agent</title>
+    <title>Glide</title>
     <link rel="stylesheet" href="sidepanel.css" />
   </head>
   <body>
     <header class="topbar">
       <div class="brand">
-        <span class="logo">✦</span>
-        <span class="brand-name">Gemini&nbsp;Agent</span>
+        <span class="logo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 12h11" />
+            <path d="M13 7l5 5-5 5" />
+            <path d="M3 8h3" opacity="0.6" />
+            <path d="M3 16h3" opacity="0.6" />
+          </svg>
+        </span>
+        <span class="brand-name">Glide</span>
       </div>
       <div class="topbar-actions">
         <button id="modelBadge" class="model-badge" hidden><span></span> ▾</button>
@@ -32,9 +39,16 @@
 
     <main id="messages" class="messages">
       <div class="welcome">
-        <div class="welcome-logo">✦</div>
-        <h1>Gemini Agent</h1>
-        <p>I can read this page, take actions for you, research across tabs, and more.</p>
+        <div class="welcome-logo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 12h11" />
+            <path d="M13 7l5 5-5 5" />
+            <path d="M3 8h3" opacity="0.6" />
+            <path d="M3 16h3" opacity="0.6" />
+          </svg>
+        </div>
+        <h1>Glide</h1>
+        <p>I read this page, plan tasks, and take actions for you — clicking, typing, and researching across tabs.</p>
         <div class="suggestions">
           <button class="chip" data-prompt="Summarize this page in a few clear bullet points.">
             <span class="chip-ic">📄</span> Summarize this page

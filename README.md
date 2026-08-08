@@ -1,10 +1,10 @@
-# ✦ Gemini Agent — AI Browser Assistant
+# ➤ Glide — AI Browser Agent
 
-An **agentic** AI assistant browser extension (Chrome + Firefox, Manifest V3),
+**Glide** is an **agentic** AI browser extension (Chrome + Firefox, Manifest V3),
 inspired by Claude's browser extension but powered by **Gemini**. It lives in a
-side panel, reads the page you're on, and can **take actions for you** — click
-buttons, type into fields, scroll, and navigate — all driven by natural
-language.
+side panel, reads the page you're on, plans tasks, and can **take actions for
+you** — click, type, drag, scroll, and navigate across tabs — all driven by
+natural language.
 
 The Gemini API key lives on a small **backend server**, never inside the
 extension, so your key stays secure.
@@ -107,7 +107,7 @@ npm run icons        # from the repo root — writes extension/icons/*.png
 1. Go to `about:debugging#/runtime/this-firefox`
 2. Click **Load Temporary Add-on…**
 3. Select `extension/manifest.json`
-4. Open the sidebar (View → Sidebar → Gemini Agent, or the toolbar icon)
+4. Open the sidebar (View → Sidebar → Glide, or the toolbar icon)
 
 ### 4. Use it
 
