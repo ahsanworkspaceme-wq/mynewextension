@@ -221,6 +221,63 @@ body {
   color: var(--danger);
 }
 
+/* Confirmation card */
+.confirm-card {
+  align-self: stretch;
+  background: var(--bg-elev);
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  padding: 12px;
+  animation: fade 0.15s ease;
+}
+.confirm-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.confirm-detail {
+  font-size: 13px;
+  color: var(--text-dim);
+  word-break: break-word;
+  margin-bottom: 10px;
+}
+.confirm-actions {
+  display: flex;
+  gap: 8px;
+}
+.confirm-actions button {
+  flex: 1;
+  padding: 8px;
+  border-radius: 8px;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.confirm-yes {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+}
+.confirm-no {
+  background: var(--bg-input);
+  color: var(--text);
+  border: 1px solid var(--border) !important;
+}
+.confirm-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.confirm-note {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.confirm-card.approved {
+  border-color: #22c55e;
+}
+.confirm-card.rejected {
+  border-color: var(--danger);
+}
+
 /* Status bar (thinking indicator) */
 .status-bar {
   padding: 6px 14px;

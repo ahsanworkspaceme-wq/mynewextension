@@ -24,8 +24,17 @@ extension, so your key stays secure.
 - 💬 **Chat about the current page** — summarize, explain, translate, extract facts.
 - 🖱️ **Take actions** — the agent can click, type + submit, scroll, and navigate
   to accomplish tasks like "search for X", "fill this form", "open the first result".
-- 🔁 **Agentic loop** — it takes one step, re-reads the page, and continues until
-  the task is done (bounded by a configurable max-steps safety limit).
+- 👁️ **Vision mode** — Gemini is multimodal, so the agent can take a **screenshot**,
+  *see* the page, and click/type by **pixel coordinates** — for canvas apps, maps,
+  and custom widgets where DOM reading isn't enough.
+- 🖼️ **iframe & shadow DOM aware** — reads and acts inside same-origin iframes and
+  open shadow roots, not just the top document.
+- 🛡️ **Safety confirmations** — optionally asks before risky actions (navigating,
+  submitting forms) or before every action. Configurable.
+- ✨ **Visual highlight** — flashes the element (or the exact spot) it's about to
+  interact with, so you can watch what it does.
+- 🔁 **Agentic loop** — it takes one step, re-reads the page (or re-screenshots),
+  and continues until the task is done (bounded by a max-steps safety limit).
 - 🔒 **Key stays on the backend** — the extension only talks to your server.
 - 🌗 **Light & dark** side panel UI.
 
@@ -93,11 +102,24 @@ in the extension's **Settings** (⚙ icon in the side panel).
    indexed list of interactive elements + visible text) and sends it, with your
    message, to the backend.
 3. The **backend** adds the system prompt + tool definitions and calls Gemini.
-4. Gemini replies with either a **text answer** or a **tool call**
-   (`click`, `type_text`, `scroll`, `navigate`, …).
+4. Gemini replies with either a **text answer** or a **tool call**. Tools come in
+   two flavours:
+   - **DOM / index** — `click`, `type_text` using the indexed element list.
+   - **Vision / coordinate** — `screenshot` to see the page, then `click_at` /
+     `type_at` using pixel coordinates read off the image.
+   - plus `scroll`, `navigate`, `go_back`, `wait`.
 5. If it's a tool call, the extension executes it on the page via the **content
-   script**, captures the result, and loops back to step 3.
+   script** (highlighting the target first, and asking you to confirm if the
+   action is risky), captures the result, and loops back to step 3. A
+   `screenshot` result attaches the image so Gemini can see the page.
 6. When Gemini returns plain text, that's shown as the final answer.
+
+### Settings (⚙ in the side panel)
+
+- **Backend URL** — where your server runs.
+- **Max agent steps** — safety cap on actions per request.
+- **Confirm before actions** — `Never`, `Risky only` (default: ask before
+  navigating & submitting), or `Every action`.
 
 ## Project structure
 

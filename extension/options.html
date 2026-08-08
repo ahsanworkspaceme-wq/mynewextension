@@ -92,8 +92,19 @@
     <div class="hint">Where your backend server is running. Default: <code>http://localhost:8787</code></div>
 
     <label for="maxSteps">Max agent steps per request</label>
-    <input id="maxSteps" type="number" min="1" max="40" placeholder="16" />
+    <input id="maxSteps" type="number" min="1" max="40" placeholder="20" />
     <div class="hint">Safety limit on how many actions the agent takes before stopping.</div>
+
+    <label for="confirmMode">Confirm before actions</label>
+    <select
+      id="confirmMode"
+      style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid #8884; background: transparent; color: inherit; font-size: 14px;"
+    >
+      <option value="off">Never — let the agent act freely</option>
+      <option value="risky">Risky only — ask before navigating &amp; submitting (recommended)</option>
+      <option value="all">Every action — ask before every click, type, navigate</option>
+    </select>
+    <div class="hint">Choose when the agent should ask you before it acts on the page.</div>
 
     <div>
       <button id="save">Save</button>

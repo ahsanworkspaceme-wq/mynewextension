@@ -71,27 +71,59 @@ function prettyArgs(args) {
 
 const TOOL_LABELS = {
   get_page_state: "Reading page",
+  screenshot: "Looking at the page",
   click: "Clicking",
+  click_at: "Clicking",
   type_text: "Typing",
+  type_at: "Typing",
   scroll: "Scrolling",
   navigate: "Navigating",
   go_back: "Going back",
   wait: "Waiting",
 };
 
-function addToolLog(name, args) {
+function addToolLog(name, args, declined) {
   clearWelcome();
   const el = document.createElement("div");
   el.className = "tool-log";
   const label = TOOL_LABELS[name] || name;
   const argStr = prettyArgs(args);
+  const icon = declined ? "🚫" : "🔧";
   el.innerHTML =
-    `<span class="tool-name">🔧 ${label}</span>` +
+    `<span class="tool-name">${icon} ${label}${declined ? " (declined)" : ""}</span>` +
     (argStr ? ` <span>${formatText(argStr)}</span>` : "") +
     `<div class="tool-result"></div>`;
   els.messages.appendChild(el);
   scrollToBottom();
-  currentToolLog = el;
+  currentToolLog = declined ? null : el;
+}
+
+function renderConfirm(id, detail) {
+  clearWelcome();
+  const card = document.createElement("div");
+  card.className = "confirm-card";
+  card.innerHTML =
+    `<div class="confirm-title">⚠️ Confirm action</div>` +
+    `<div class="confirm-detail">${formatText(detail)}</div>` +
+    `<div class="confirm-actions">` +
+    `<button class="confirm-yes">Approve</button>` +
+    `<button class="confirm-no">Reject</button>` +
+    `</div>`;
+  els.messages.appendChild(card);
+  scrollToBottom();
+
+  const respond = (approved) => {
+    ensurePort().postMessage({ type: "confirm_result", id, approved });
+    card.querySelectorAll("button").forEach((b) => (b.disabled = true));
+    card.classList.add(approved ? "approved" : "rejected");
+    const note = document.createElement("div");
+    note.className = "confirm-note";
+    note.textContent = approved ? "✓ Approved" : "✕ Rejected";
+    card.appendChild(note);
+    setStatus(approved ? "Working…" : "");
+  };
+  card.querySelector(".confirm-yes").addEventListener("click", () => respond(true));
+  card.querySelector(".confirm-no").addEventListener("click", () => respond(false));
 }
 
 function setToolResult(result) {
@@ -129,9 +161,16 @@ function onPortMessage(msg) {
     case "thinking":
       setStatus("Thinking…");
       break;
+    case "thinking_pause":
+      setStatus("Waiting for your confirmation…");
+      break;
+    case "confirm":
+      setStatus("Waiting for your confirmation…");
+      renderConfirm(msg.id, msg.detail);
+      break;
     case "tool":
       setStatus(`${TOOL_LABELS[msg.name] || msg.name}…`);
-      addToolLog(msg.name, msg.args);
+      addToolLog(msg.name, msg.args, msg.declined);
       break;
     case "tool_result":
       setToolResult(msg.result);
