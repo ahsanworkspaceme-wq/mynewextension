@@ -45,7 +45,18 @@ npm start
 Get a key at **https://aistudio.google.com/apikey**. See
 [`backend/README.md`](backend/README.md) for details and deployment.
 
-### 2. Load the extension
+### 2. Build the extension icons (one time)
+
+The icons are generated (not committed as binaries), so create them once:
+
+```bash
+npm run icons        # from the repo root — writes extension/icons/*.png
+```
+
+> Skip this and Chrome will refuse to load the extension with a
+> "Could not load icon" error, since `manifest.json` references those files.
+
+### 3. Load the extension
 
 **Chrome / Edge**
 
@@ -61,7 +72,7 @@ Get a key at **https://aistudio.google.com/apikey**. See
 3. Select `extension/manifest.json`
 4. Open the sidebar (View → Sidebar → Gemini Agent, or the toolbar icon)
 
-### 3. Use it
+### 4. Use it
 
 Open the side panel on any web page and ask, e.g.:
 

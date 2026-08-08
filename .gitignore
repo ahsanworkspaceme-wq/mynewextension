@@ -22,3 +22,6 @@ Thumbs.db
 # build output
 extension/*.zip
 dist/
+
+# generated icons (recreate with: npm run icons)
+extension/icons/*.png
