@@ -59,7 +59,9 @@
     "scripting",
     "storage",
     "sidePanel",
-    "downloads"
+    "downloads",
+    "alarms",
+    "notifications"
   ],
   "optional_permissions": ["debugger"],
   "host_permissions": ["<all_urls>"],

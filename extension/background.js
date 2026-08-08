@@ -50,6 +50,50 @@ async function rememberAllowedDomain(domain) {
   await api.storage.local.set({ allowedDomains: [...set] });
 }
 
+// ---- long-term memory -------------------------------------------------------
+
+async function getMemories() {
+  const s = await api.storage.local.get(["memories"]);
+  return Array.isArray(s.memories) ? s.memories : [];
+}
+async function addMemory(note) {
+  const mem = await getMemories();
+  mem.push({ note: String(note).slice(0, 500), at: Date.now() });
+  await api.storage.local.set({ memories: mem.slice(-100) });
+  return mem.length;
+}
+
+// ---- connected side panels (for scheduled auto-run) -------------------------
+
+const connectedPorts = new Set();
+
+// ---- scheduled tasks (chrome.alarms) ----------------------------------------
+
+if (api.alarms?.onAlarm) {
+  api.alarms.onAlarm.addListener(async (alarm) => {
+    if (!alarm.name.startsWith("skill:")) return;
+    const s = await api.storage.local.get(["schedules"]);
+    const sched = (s.schedules || []).find((x) => `skill:${x.id}` === alarm.name);
+    if (!sched) return;
+    // If a side panel is open, auto-run; otherwise notify.
+    if (connectedPorts.size) {
+      for (const p of connectedPorts) {
+        try {
+          p.postMessage({ type: "run_prompt", text: sched.prompt });
+        } catch (_) {}
+        break;
+      }
+    } else if (api.notifications?.create) {
+      api.notifications.create({
+        type: "basic",
+        iconUrl: api.runtime.getURL("icons/icon-128.png"),
+        title: "Gemini Agent — scheduled task",
+        message: `"${sched.name}" is due. Open the side panel to run it.`,
+      });
+    }
+  });
+}
+
 // ---- side panel opening (icon + keyboard) -----------------------------------
 
 if (api.sidePanel?.setPanelBehavior) {
@@ -287,8 +331,8 @@ async function executeTool(ctx, name, args, config) {
       try {
         const image = await captureScreenshot(tab, state);
         return {
-          result: `Screenshot captured (${image.width}x${image.height} px). Image attached. Use these pixel coords (top-left origin) for click_at/type_at.`,
-          image,
+          result: `Screenshot captured (${image.width}x${image.height} px). Image attached. Use these pixel coords (top-left origin) for click_at/type_at/drag.`,
+          media: image,
         };
       } catch (err) {
         return { result: `Screenshot failed: ${String(err?.message || err)}` };
@@ -414,6 +458,72 @@ async function executeTool(ctx, name, args, config) {
       };
     }
 
+    case "drag": {
+      const res = await sendToTab(tabId, {
+        type: "drag",
+        fromX: args.from_x,
+        fromY: args.from_y,
+        toX: args.to_x,
+        toY: args.to_y,
+      });
+      await delay(300);
+      return { result: res?.ok ? res.message : `Failed: ${res?.error}` };
+    }
+    case "extract_data": {
+      const res = await sendToTab(tabId, { type: "get_extract" });
+      if (!res?.ok) return { result: `Failed: ${res?.error}` };
+      const d = res.data;
+      return { result: `TABLES:\n${d.tables}\n\nLISTS:\n${d.lists}\n\nLINKS:\n${d.links}` };
+    }
+    case "read_pdf": {
+      let url = String(args.url || "").trim();
+      if (!url) {
+        const tab = await getTab(tabId);
+        url = tab?.url || "";
+      }
+      if (!/\.pdf(\?|$)/i.test(url) && !url.startsWith("blob:") && !url.startsWith("data:")) {
+        // still try; many PDF URLs lack extension
+      }
+      try {
+        const buf = await (await fetch(url)).arrayBuffer();
+        if (buf.byteLength > 12 * 1024 * 1024) return { result: "PDF is too large (>12MB) to read." };
+        return {
+          result: `Fetched PDF (${Math.round(buf.byteLength / 1024)} KB) from ${url}. Document attached — read it to answer.`,
+          media: { mimeType: "application/pdf", data: arrayBufferToBase64(buf) },
+        };
+      } catch (err) {
+        return { result: `Could not fetch PDF: ${String(err?.message || err)}` };
+      }
+    }
+    case "remember": {
+      const count = await addMemory(args.note || "");
+      return { result: `Saved to memory (${count} notes total).` };
+    }
+    case "recall": {
+      const mem = await getMemories();
+      if (!mem.length) return { result: "No saved memories yet." };
+      return { result: "Saved memories:\n" + mem.map((m) => `- ${m.note}`).join("\n") };
+    }
+    case "http_request": {
+      let url = String(args.url || "").trim();
+      if (!url) return { result: "http_request needs a url." };
+      const method = (args.method || "GET").toUpperCase();
+      let headers = {};
+      try {
+        headers = typeof args.headers === "string" ? JSON.parse(args.headers) : args.headers || {};
+      } catch (_) {}
+      try {
+        const resp = await fetch(url, {
+          method,
+          headers,
+          body: method === "GET" || method === "HEAD" ? undefined : args.body,
+        });
+        const text = (await resp.text()).slice(0, 4000);
+        return { result: `HTTP ${resp.status} ${resp.statusText}\n${text}` };
+      } catch (err) {
+        return { result: `Request failed: ${String(err?.message || err)}` };
+      }
+    }
     case "wait": {
       const secs = Math.min(Number(args.seconds) || 1, 8);
       await delay(secs * 1000);
@@ -431,7 +541,7 @@ async function settle(tabId, timeout = 8000) {
 
 // ---- gating: risk, blocked sites, per-site access ---------------------------
 
-const ACTION_TOOLS = ["click", "click_at", "type_text", "type_at", "navigate", "go_back", "upload_file", "open_tab"];
+const ACTION_TOOLS = ["click", "click_at", "type_text", "type_at", "navigate", "go_back", "upload_file", "open_tab", "drag", "http_request", "download"];
 
 function isActionTool(name) {
   return ACTION_TOOLS.includes(name);
@@ -439,6 +549,7 @@ function isActionTool(name) {
 
 function needsConfirm(name, args, mode) {
   if (mode === "off") return false;
+  if (name === "http_request" && args?.method && !["GET", "HEAD"].includes(String(args.method).toUpperCase())) return true;
   if (mode === "all") return isActionTool(name);
   if (name === "navigate" || name === "open_tab") return true;
   if ((name === "type_text" || name === "type_at") && args?.submit) return true;
@@ -461,6 +572,12 @@ function confirmDetail(name, args) {
       return `Click at (${args.x}, ${args.y})`;
     case "upload_file":
       return `Open file chooser for element [${args.index}]`;
+    case "drag":
+      return `Drag from (${args.from_x}, ${args.from_y}) to (${args.to_x}, ${args.to_y})`;
+    case "http_request":
+      return `${(args.method || "GET").toUpperCase()} request to: ${args.url}`;
+    case "download":
+      return `Download: ${args.url}`;
     default:
       return name;
   }
@@ -507,12 +624,14 @@ async function loadSession() {
 
 api.runtime.onConnect.addListener((port) => {
   if (port.name !== "agent") return;
+  connectedPorts.add(port);
 
   let contents = [];
   let busy = false;
   let interrupted = false;
-  const pendingConfirms = new Map();
-  let confirmSeq = 0;
+  let sessionTokens = 0;
+  const pending = new Map(); // id -> resolver (confirm / plan / ask)
+  let seq = 0;
   const ctx = { tabId: null };
 
   const send = (msg) => {
@@ -521,25 +640,25 @@ api.runtime.onConnect.addListener((port) => {
     } catch (_) {}
   };
 
-  function requestConfirm(detail) {
+  function requestUI(payload) {
     return new Promise((resolve) => {
-      const id = ++confirmSeq;
-      pendingConfirms.set(id, resolve);
-      send({ type: "confirm", id, detail });
+      const id = ++seq;
+      pending.set(id, resolve);
+      send({ ...payload, id });
     });
   }
+  const requestConfirm = (detail) => requestUI({ type: "confirm", detail });
 
-  // restore persisted conversation
   loadSession().then((saved) => {
     if (saved.length) contents = saved;
   });
 
   port.onMessage.addListener(async (msg) => {
-    if (msg?.type === "confirm_result") {
-      const resolve = pendingConfirms.get(msg.id);
+    if (msg?.type === "ui_result") {
+      const resolve = pending.get(msg.id);
       if (resolve) {
-        pendingConfirms.delete(msg.id);
-        resolve(!!msg.approved);
+        pending.delete(msg.id);
+        resolve(msg.data);
       }
       return;
     }
@@ -549,11 +668,23 @@ api.runtime.onConnect.addListener((port) => {
     }
     if (msg?.type === "reset") {
       contents = [];
+      sessionTokens = 0;
       await api.storage.local.remove([SESSION_KEY]);
       send({ type: "reset_done" });
       return;
     }
-    if (msg?.type !== "user_message") return;
+    if (msg?.type === "user_message") {
+      await processMessage(msg.text);
+    }
+  });
+
+  port.onDisconnect.addListener(() => {
+    connectedPorts.delete(port);
+    pending.forEach((resolve) => resolve(null));
+    pending.clear();
+  });
+
+  async function processMessage(text) {
     if (busy) {
       send({ type: "error", text: "Agent is still working on the previous request." });
       return;
@@ -568,15 +699,20 @@ api.runtime.onConnect.addListener((port) => {
         send({ type: "error", text: "No active tab found." });
         return;
       }
-      ctx.tabId = active.id; // follow the user's current tab each new message
+      ctx.tabId = active.id;
+
+      // On a fresh conversation, seed long-term memory.
+      const isFirst = contents.length === 0;
+      const memParts = [];
+      if (isFirst) {
+        const mem = await getMemories();
+        if (mem.length) memParts.push({ text: `[Your long-term memory about this user]\n${mem.map((m) => "- " + m.note).join("\n")}` });
+      }
 
       const state = await getPageState(ctx.tabId);
       contents.push({
         role: "user",
-        parts: [
-          { text: msg.text },
-          { text: `\n\n[Current page state]\n${formatState(state)}` },
-        ],
+        parts: [...memParts, { text }, { text: `\n\n[Current page state]\n${formatState(state)}` }],
       });
 
       let steps = 0;
@@ -592,11 +728,13 @@ api.runtime.onConnect.addListener((port) => {
         try {
           data = await callBackend(config.backendUrl, contents);
         } catch (err) {
-          send({
-            type: "error",
-            text: `Could not reach the backend at ${config.backendUrl}. Is it running? (cd backend && npm start)\n\n${String(err.message || err)}`,
-          });
+          send({ type: "error", text: `Could not reach the backend at ${config.backendUrl}. Is it running? (cd backend && npm start)\n\n${String(err.message || err)}` });
           return;
+        }
+
+        if (data?.usage?.totalTokenCount) {
+          sessionTokens += data.usage.totalTokenCount;
+          send({ type: "usage", total: sessionTokens });
         }
 
         const parts = data?.parts || [];
@@ -604,7 +742,6 @@ api.runtime.onConnect.addListener((port) => {
 
         const calls = parts.filter((p) => p.functionCall).map((p) => p.functionCall);
         const textParts = parts.filter((p) => p.text).map((p) => p.text);
-
         if (textParts.length && calls.length) send({ type: "assistant_interim", text: textParts.join("").trim() });
 
         if (calls.length === 0) {
@@ -620,20 +757,38 @@ api.runtime.onConnect.addListener((port) => {
           }
           const args = call.args || {};
 
+          // ---- planning: propose_plan -> Approve / Make changes ----
+          if (call.name === "propose_plan") {
+            const res = (await requestUI({ type: "plan", steps: args.steps || [], goal: args.goal || "" })) || {};
+            const result = res.approved
+              ? "User APPROVED the plan. Proceed with it."
+              : `User did not approve. Requested changes: ${res.feedback || "(none given)"}. Revise the plan.`;
+            send({ type: "tool_result", name: "propose_plan", result });
+            responseParts.push({ functionResponse: { name: call.name, response: { result } } });
+            continue;
+          }
+
+          // ---- handover: ask_user (CAPTCHA / 2FA / clarification) ----
+          if (call.name === "ask_user") {
+            const res = (await requestUI({ type: "ask", question: args.question || "The agent needs your input." })) || {};
+            const answer = res.text || "(no answer)";
+            responseParts.push({ functionResponse: { name: call.name, response: { result: `User replied: ${answer}` } } });
+            continue;
+          }
+
           // ---- safety gating for action tools ----
           if (isActionTool(call.name)) {
             const tab = await getTab(ctx.tabId);
-            const host = hostOf(call.name === "navigate" || call.name === "open_tab" ? args.url || tab?.url : tab?.url);
+            const targetForHost = call.name === "navigate" || call.name === "open_tab" || call.name === "http_request" || call.name === "download" ? args.url : tab?.url;
+            const host = hostOf(targetForHost || tab?.url);
             if (siteIsBlocked(host, config.blockedSites)) {
               send({ type: "tool", name: call.name, args, declined: true });
-              responseParts.push({
-                functionResponse: { name: call.name, response: { result: `BLOCKED: "${host}" is on the user's blocked-sites list. Do not act here; tell the user.` } },
-              });
+              responseParts.push({ functionResponse: { name: call.name, response: { result: `BLOCKED: "${host}" is on the user's blocked-sites list. Do not act here; tell the user.` } } });
               continue;
             }
             if (config.siteAccess === "ask" && host && !config.allowedDomains.has(host)) {
-              const ok = await requestConfirm(`Allow the agent to act on "${host}"? (remembered for this site)`);
-              if (!ok) {
+              const res = (await requestConfirm(`Allow the agent to act on "${host}"? (remembered for this site)`)) || {};
+              if (!res.approved) {
                 send({ type: "tool", name: call.name, args, declined: true });
                 responseParts.push({ functionResponse: { name: call.name, response: { result: `User did NOT grant access to ${host}.` } } });
                 continue;
@@ -646,8 +801,8 @@ api.runtime.onConnect.addListener((port) => {
           // ---- per-action confirmation ----
           if (needsConfirm(call.name, args, config.confirmMode)) {
             send({ type: "thinking_pause" });
-            const approved = await requestConfirm(confirmDetail(call.name, args));
-            if (!approved) {
+            const res = (await requestConfirm(confirmDetail(call.name, args))) || {};
+            if (!res.approved) {
               send({ type: "tool", name: call.name, args, declined: true });
               responseParts.push({ functionResponse: { name: call.name, response: { result: "The user DECLINED this action. Do not repeat it; ask how to proceed." } } });
               continue;
@@ -662,10 +817,11 @@ api.runtime.onConnect.addListener((port) => {
             out = { result: `Error executing ${call.name}: ${String(err?.message || err)}` };
           }
           if (out.newTabId) ctx.tabId = out.newTabId;
-          send({ type: "tool_result", name: call.name, result: out.result });
+          const thumb = out.media && String(out.media.mimeType).startsWith("image") ? `data:${out.media.mimeType};base64,${out.media.data}` : undefined;
+          send({ type: "tool_result", name: call.name, result: out.result, thumb });
 
           responseParts.push({ functionResponse: { name: call.name, response: { result: String(out.result) } } });
-          if (out.image) responseParts.push({ inlineData: { mimeType: out.image.mimeType, data: out.image.data } });
+          if (out.media) responseParts.push({ inlineData: { mimeType: out.media.mimeType, data: out.media.data } });
         }
         contents.push({ role: "user", parts: responseParts });
       }
@@ -680,10 +836,5 @@ api.runtime.onConnect.addListener((port) => {
       busy = false;
       send({ type: "done" });
     }
-  });
-
-  port.onDisconnect.addListener(() => {
-    pendingConfirms.forEach((resolve) => resolve(false));
-    pendingConfirms.clear();
-  });
+  }
 });

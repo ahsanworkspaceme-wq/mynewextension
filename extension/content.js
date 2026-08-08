@@ -216,15 +216,116 @@
 
   function highlightElement(el) {
     try {
-      flash(rectInTopViewport(el));
+      const r = rectInTopViewport(el);
+      flash(r);
+      moveCursor(r.left + r.width / 2, r.top + r.height / 2);
     } catch (_) {}
   }
 
   function highlightPoint(x, y) {
     flash({ left: x - 14, top: y - 14, width: 28, height: 28 });
+    moveCursor(x, y);
   }
 
   const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  // ---- animated agent cursor ------------------------------------------------
+
+  let cursorEl = null;
+  function ensureCursor() {
+    if (cursorEl && document.documentElement.contains(cursorEl)) return cursorEl;
+    cursorEl = document.createElement("div");
+    Object.assign(cursorEl.style, {
+      position: "fixed",
+      left: "0",
+      top: "0",
+      width: "20px",
+      height: "20px",
+      background: "#7c5cff",
+      clipPath: "polygon(0 0, 0 75%, 27% 58%, 45% 100%, 62% 90%, 45% 52%, 75% 52%)",
+      filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.5))",
+      zIndex: "2147483647",
+      pointerEvents: "none",
+      transform: "translate(-100px,-100px)",
+      transition: "transform 0.35s cubic-bezier(0.22,1,0.36,1)",
+      opacity: "0.95",
+    });
+    document.documentElement.appendChild(cursorEl);
+    return cursorEl;
+  }
+  function moveCursor(x, y) {
+    try {
+      const c = ensureCursor();
+      c.style.transform = `translate(${x - 2}px, ${y - 2}px)`;
+    } catch (_) {}
+  }
+  function cursorPress() {
+    if (!cursorEl) return;
+    cursorEl.style.background = "#4f8cff";
+    setTimeout(() => cursorEl && (cursorEl.style.background = "#7c5cff"), 200);
+  }
+
+  // ---- drag (for canvas UIs like n8n) ---------------------------------------
+
+  function pointerAt(el, type, x, y) {
+    const opts = { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y, button: 0, buttons: type === "pointerup" ? 0 : 1, pointerId: 1 };
+    try {
+      el.dispatchEvent(new PointerEvent(type, opts));
+    } catch (_) {}
+    const mouseType = { pointerdown: "mousedown", pointermove: "mousemove", pointerup: "mouseup" }[type];
+    if (mouseType) el.dispatchEvent(new MouseEvent(mouseType, opts));
+  }
+
+  async function doDrag(fromX, fromY, toX, toY) {
+    const startEl = deepElementFromPoint(fromX, fromY) || document.body;
+    moveCursor(fromX, fromY);
+    await pause(300);
+    pointerAt(startEl, "pointerdown", fromX, fromY);
+    const steps = 12;
+    for (let i = 1; i <= steps; i++) {
+      const x = fromX + ((toX - fromX) * i) / steps;
+      const y = fromY + ((toY - fromY) * i) / steps;
+      const overEl = deepElementFromPoint(x, y) || startEl;
+      pointerAt(overEl, "pointermove", x, y);
+      moveCursor(x, y);
+      await pause(25);
+    }
+    const endEl = deepElementFromPoint(toX, toY) || startEl;
+    pointerAt(endEl, "pointerup", toX, toY);
+    return { ok: true, message: `Dragged from (${fromX},${fromY}) to (${toX},${toY})` };
+  }
+
+  // ---- structured extraction ------------------------------------------------
+
+  function extractData() {
+    const tables = [];
+    document.querySelectorAll("table").forEach((tbl, i) => {
+      if (i >= 10) return;
+      const rows = [];
+      tbl.querySelectorAll("tr").forEach((tr) => {
+        const cells = [...tr.querySelectorAll("th,td")].map((c) => clean(c.innerText).replace(/\t/g, " "));
+        if (cells.length) rows.push(cells.join("\t"));
+      });
+      if (rows.length) tables.push(`Table ${i + 1}:\n${rows.slice(0, 50).join("\n")}`);
+    });
+    const links = [];
+    document.querySelectorAll("a[href]").forEach((a, i) => {
+      if (i >= 60) return;
+      const t = clean(a.innerText);
+      if (t) links.push(`${t} -> ${a.href}`);
+    });
+    const lists = [];
+    document.querySelectorAll("ul,ol").forEach((l, i) => {
+      if (i >= 8) return;
+      const items = [...l.querySelectorAll("li")].slice(0, 30).map((li) => "• " + clean(li.innerText)).filter((s) => s.length > 2);
+      if (items.length) lists.push(items.join("\n"));
+    });
+    return {
+      tables: tables.join("\n\n") || "(no tables)",
+      lists: lists.join("\n\n") || "(no lists)",
+      links: links.join("\n") || "(no links)",
+    };
+  }
 
   // ---- input synthesis ------------------------------------------------------
 
@@ -267,6 +368,7 @@
     el.dispatchEvent(new MouseEvent("mouseup", opts));
     el.dispatchEvent(new MouseEvent("click", opts));
     if (typeof el.click === "function") el.click();
+    cursorPress();
   }
 
   function typeInto(el, text, submit) {
@@ -360,6 +462,12 @@
           case "highlight_at":
             highlightPoint(msg.x, msg.y);
             sendResponse({ ok: true });
+            break;
+          case "drag":
+            sendResponse(await doDrag(msg.fromX, msg.fromY, msg.toX, msg.toY));
+            break;
+          case "get_extract":
+            sendResponse({ ok: true, data: extractData() });
             break;
           case "scroll":
             sendResponse(doScroll(msg.direction || "down", msg.pixels));

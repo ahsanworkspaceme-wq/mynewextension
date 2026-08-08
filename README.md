@@ -33,6 +33,19 @@ extension, so your key stays secure.
   submitting forms) or before every action. Configurable.
 - ✨ **Visual highlight** — flashes the element (or the exact spot) it's about to
   interact with, so you can watch what it does.
+- 🧠 **Plans first** — for non-trivial tasks it proposes a step-by-step plan and
+  waits for your **Approve / Make changes** before acting.
+- 🖐️ **Animated cursor + drag** — a visible agent cursor glides to each target,
+  and it can drag on canvas UIs (sliders, node editors like **n8n**).
+- 💾 **Long-term memory** — `remember` / `recall`; saved notes are recalled in
+  future chats.
+- ⚡ **Skills & schedules** — save a request as a reusable skill (⚡) and schedule
+  it to run on an interval (⏰).
+- 🔌 **API connector** — `http_request` lets it call REST APIs/webhooks (e.g. build
+  an **n8n** workflow via the n8n API — more reliable than dragging nodes).
+- 📄 **PDF & structured data** — reads PDFs and extracts tables/lists/links.
+- 🙋 **Handover** — pauses and asks you for CAPTCHAs, 2FA, or decisions (`ask_user`).
+- 📊 **Token usage** shown live in the header.
 - 🗂️ **Multi-tab** — opens new tabs and switches between them to research across
   several sites and compile the results (`list_tabs`, `open_tab`, `switch_tab`, `close_tab`).
 - ⚡ **Power mode (Chrome)** — optional OS-level mouse/keyboard input via the

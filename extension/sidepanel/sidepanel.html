@@ -10,42 +10,58 @@
     <header class="topbar">
       <div class="brand">
         <span class="logo">✦</span>
-        <span class="brand-name">Gemini Agent</span>
+        <div class="brand-text">
+          <span class="brand-name">Gemini Agent</span>
+          <span id="modelBadge" class="model-badge" hidden></span>
+        </div>
       </div>
       <div class="topbar-actions">
+        <span id="usage" class="usage" title="Tokens used this session" hidden></span>
+        <button id="saveSkill" class="icon-btn" title="Save last request as a skill">⚡</button>
+        <button id="schedule" class="icon-btn" title="Schedule a saved skill">⏰</button>
         <button id="newChat" class="icon-btn" title="New chat">＋</button>
         <button id="openOptions" class="icon-btn" title="Settings">⚙</button>
       </div>
     </header>
 
+    <div id="skillsBar" class="skills-bar" hidden></div>
+
     <main id="messages" class="messages">
       <div class="welcome">
         <div class="welcome-logo">✦</div>
         <h1>Gemini Agent</h1>
-        <p>I can read this page and take actions for you — click, type, scroll and navigate.</p>
+        <p>I can read this page, take actions for you, research across tabs, and more.</p>
         <div class="suggestions">
           <button class="chip" data-prompt="Summarize this page in a few bullet points.">Summarize this page</button>
-          <button class="chip" data-prompt="What are the main links on this page? List them.">List the main links</button>
-          <button class="chip" data-prompt="Extract the key facts and figures from this page.">Extract key facts</button>
+          <button class="chip" data-prompt="Make a plan to complete a task on this site, then do it after I approve.">Plan &amp; do a task</button>
+          <button class="chip" data-prompt="Extract the key data on this page as a clean list.">Extract key data</button>
         </div>
       </div>
     </main>
 
     <div id="statusBar" class="status-bar" hidden>
-      <span class="dot"></span>
-      <span id="statusText"></span>
-      <button id="stop" class="stop-btn" title="Stop">■ Stop</button>
+      <span class="spinner"></span>
+      <span id="statusText">Working…</span>
+      <button id="stop" class="stop-btn" title="Stop">Stop</button>
     </div>
 
     <footer class="composer">
-      <button id="mic" class="icon-btn mic-btn" title="Dictate (voice)">🎤</button>
-      <textarea
-        id="input"
-        rows="1"
-        placeholder="Ask the agent to do something…"
-        autocomplete="off"
-      ></textarea>
-      <button id="send" class="send-btn" title="Send">➤</button>
+      <div class="composer-row">
+        <button id="mic" class="icon-btn mic-btn" title="Dictate (voice)">🎤</button>
+        <textarea id="input" rows="1" placeholder="Ask the agent to do anything…" autocomplete="off"></textarea>
+        <button id="send" class="send-btn" title="Send">➤</button>
+      </div>
+      <div class="composer-meta">
+        <label class="ask-select" title="When should the agent ask you before acting?">
+          <span class="ask-dot"></span>
+          <select id="confirmMode">
+            <option value="risky">Ask before risky actions</option>
+            <option value="all">Ask before every action</option>
+            <option value="off">Act freely</option>
+          </select>
+        </label>
+        <span class="hint-key">Enter to send</span>
+      </div>
     </footer>
 
     <script src="sidepanel.js"></script>
