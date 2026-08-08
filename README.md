@@ -77,6 +77,22 @@ extension, so your key stays secure.
 
 > 📘 **New here? Follow the [complete step-by-step install guide → INSTALL.md](INSTALL.md).**
 
+### ⚡ One command (does everything)
+
+```bash
+git clone https://github.com/ahsanworkspaceme-wq/mynewextension.git
+cd mynewextension
+npm run go
+```
+
+`npm run go` generates icons, installs the backend, asks for your Gemini API key
+(get one at https://aistudio.google.com/apikey), writes `backend/.env`, and starts
+the backend. Then finish the **one** manual step it prints — load the `extension`
+folder at `chrome://extensions` (Developer mode → Load unpacked) and press
+`Ctrl+Shift+K`.
+
+<details><summary>Prefer the manual steps? Expand.</summary>
+
 ### 1. Run the backend
 
 ```bash
@@ -127,6 +143,8 @@ Open the side panel on any web page and ask, e.g.:
 
 If the backend isn't running on the default `http://localhost:8787`, set the URL
 in the extension's **Settings** (⚙ icon in the side panel).
+
+</details>
 
 ---
 

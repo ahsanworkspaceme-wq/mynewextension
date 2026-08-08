@@ -4,6 +4,7 @@
   "private": true,
   "description": "Glide — an agentic AI browser assistant (Chrome + Firefox) powered by Gemini via a secure backend.",
   "scripts": {
+    "go": "node scripts/setup.mjs",
     "icons": "node scripts/gen-icons.mjs",
     "setup": "node scripts/gen-icons.mjs && cd backend && npm install",
     "backend": "cd backend && npm start",
