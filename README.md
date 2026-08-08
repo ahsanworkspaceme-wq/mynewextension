@@ -195,6 +195,26 @@ in the extension's **Settings** (⚙ icon in the side panel).
 - Advanced features (power mode, side panel, voice) are **Chrome/Edge**-first;
   Firefox supports the core agent but not the debugger API or Web Speech.
 
+## Use any AI provider
+
+Glide isn't locked to Gemini. The extension always speaks Gemini's format and the
+backend translates it to whatever provider you choose in `backend/.env`:
+
+| `PROVIDER=` | Key needed | Notes |
+| --- | --- | --- |
+| `gemini` | `GEMINI_API_KEY` | Default. Auto-discovers available models. |
+| `openai` | `OPENAI_API_KEY` | GPT-4o, etc. |
+| `anthropic` | `ANTHROPIC_API_KEY` | Claude models. |
+| `openrouter` | `OPENROUTER_API_KEY` | **One key, many models** (Gemini/GPT/Claude/Llama). |
+| `groq` | `GROQ_API_KEY` | Very fast Llama/Mixtral. |
+| `mistral` | `MISTRAL_API_KEY` | Mistral models. |
+| `ollama` | _(none)_ | Local & offline — run `ollama serve`. |
+
+Set `PROVIDER` and the matching key in `backend/.env`, restart the backend, and
+pick a model from the header dropdown. Tool-calling (the agent's actions) is
+translated per provider, so the full agent works on all of them (vision needs a
+multimodal model).
+
 ## Project structure
 
 ```

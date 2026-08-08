@@ -1,10 +1,9 @@
-// server.js — secure proxy between the browser extension and the Gemini API.
-// The extension never sees the API key; it only talks to this server.
+// server.js — secure proxy between the Glide extension and an LLM provider.
+// The extension never sees the API key; it only talks to this server, always in
+// Gemini's canonical format. providers.js translates to/from the chosen provider
+// (Gemini, OpenAI, Anthropic, OpenRouter, Groq, Mistral, Ollama).
 //
-// POST /api/chat  { contents: [...] }  ->  { parts: [...] }
-//   `contents` is the running Gemini conversation (user/model/functionResponse).
-//   This server injects the system prompt + tool declarations and returns the
-//   model's next set of parts (text and/or functionCall).
+// POST /api/chat  { contents: [...], model? }  ->  { parts, usage, model }
 
 import express from "express";
 import cors from "cors";
@@ -12,15 +11,18 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const {
-  GEMINI_API_KEY,
-  GEMINI_MODEL = "gemini-2.5-flash",
-  PORT = 8787,
-  ALLOWED_ORIGINS = "*",
-} = process.env;
+import { chat, listModels, defaultModel, PROVIDER, activeProvider } from "./providers.js";
 
-if (!GEMINI_API_KEY) {
-  console.error("\n❌  GEMINI_API_KEY is not set. Copy .env.example to .env and add your key.\n");
+const { PORT = 8787, ALLOWED_ORIGINS = "*" } = process.env;
+
+try {
+  const p = activeProvider();
+  if (!p.key && p.name !== "ollama") {
+    console.error(`\n❌  No API key set for provider "${p.name}". Add it to backend/.env (see .env.example).\n`);
+    process.exit(1);
+  }
+} catch (err) {
+  console.error(`\n❌  ${err.message}\n`);
   process.exit(1);
 }
 
@@ -368,128 +370,34 @@ const TOOLS = [
   },
 ];
 
-const GEMINI_URL = (model) =>
-  `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-
-// Discover which models this API key can actually use (adapts to Google's
-// current lineup, so we never hardcode a model that's been retired).
-let cachedModels = null;
-async function listModels() {
-  if (cachedModels) return cachedModels;
-  try {
-    const resp = await fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200", {
-      headers: { "x-goog-api-key": GEMINI_API_KEY },
-    });
-    const data = await resp.json();
-    const models = (data.models || [])
-      .filter((m) => (m.supportedGenerationMethods || []).includes("generateContent"))
-      .map((m) => m.name.replace(/^models\//, ""))
-      .filter((n) => /^gemini/.test(n) && !/embedding|aqa|image-generation/.test(n));
-    if (models.length) cachedModels = models;
-    return models;
-  } catch (_) {
-    return [];
-  }
-}
-function pickDefault(models) {
-  return (
-    models.find((m) => /flash-latest/.test(m)) ||
-    models.find((m) => /flash/.test(m) && /latest/.test(m)) ||
-    models.find((m) => /2\.5-flash$/.test(m)) ||
-    models.find((m) => /flash/.test(m)) ||
-    models.find((m) => /pro/.test(m)) ||
-    models[0]
-  );
-}
-async function resolveModel(requested) {
-  const models = await listModels();
-  if (!models.length) return requested || GEMINI_MODEL; // discovery failed — trust the request
-  if (requested && models.includes(requested)) return requested;
-  if (models.includes(GEMINI_MODEL)) return GEMINI_MODEL;
-  return pickDefault(models) || GEMINI_MODEL;
-}
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-// Call Gemini with retry/backoff on transient errors (429 / 5xx / network).
-async function callGemini(model, payload, maxAttempts = 3) {
-  let lastErr = "";
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      const resp = await fetch(GEMINI_URL(model), {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
-        body: JSON.stringify(payload),
-      });
-      const data = await resp.json().catch(() => ({}));
-      if (resp.ok) return { ok: true, data };
-      const retryable = resp.status === 429 || resp.status >= 500;
-      lastErr = data?.error?.message || `Gemini API error ${resp.status}`;
-      if (!retryable || attempt === maxAttempts) return { ok: false, status: resp.status, error: lastErr };
-    } catch (err) {
-      lastErr = String(err?.message || err);
-      if (attempt === maxAttempts) return { ok: false, status: 502, error: `Failed to reach Gemini: ${lastErr}` };
-    }
-    await sleep(400 * Math.pow(2, attempt - 1)); // 400ms, 800ms, ...
-  }
-  return { ok: false, status: 502, error: lastErr };
-}
-
 // ---- routes -----------------------------------------------------------------
 
 app.get("/health", async (_req, res) => {
-  const models = await listModels();
-  const model = models.length ? (models.includes(GEMINI_MODEL) ? GEMINI_MODEL : pickDefault(models)) : GEMINI_MODEL;
-  res.json({ ok: true, model, models });
+  try {
+    const [models, model] = await Promise.all([listModels(), defaultModel()]);
+    res.json({ ok: true, provider: PROVIDER, model, models });
+  } catch (err) {
+    res.json({ ok: true, provider: PROVIDER, model: activeProvider().model, models: [] });
+  }
 });
 
 app.post("/api/chat", async (req, res) => {
-  const { contents, model: requestedModel } = req.body || {};
+  const { contents, model } = req.body || {};
   if (!Array.isArray(contents) || contents.length === 0) {
     return res.status(400).json({ error: "Body must include a non-empty `contents` array." });
   }
-  const model = await resolveModel(requestedModel);
-
-  const payload = {
-    system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-    contents,
-    tools: TOOLS,
-    tool_config: { function_calling_config: { mode: "AUTO" } },
-    generationConfig: {
-      temperature: 0.4,
-      maxOutputTokens: 2048,
-    },
-  };
-
-  const result = await callGemini(model, payload);
-  if (!result.ok) {
-    console.error("Gemini error:", result.error);
-    return res.status(result.status || 502).json({ error: result.error });
+  try {
+    const result = await chat({ contents, model, systemPrompt: SYSTEM_PROMPT, tools: TOOLS });
+    return res.json({ parts: result.parts, usage: result.usage, model: result.model });
+  } catch (err) {
+    console.error(`${PROVIDER} error:`, err.message);
+    return res.status(err.status || 502).json({ error: err.message });
   }
-
-  const data = result.data;
-  const candidate = data?.candidates?.[0];
-  const parts = candidate?.content?.parts || [];
-
-  if (parts.length === 0) {
-    const reason = candidate?.finishReason || "unknown";
-    return res.json({
-      parts: [{ text: `(The model returned no content. Finish reason: ${reason}.)` }],
-      finishReason: reason,
-      model,
-    });
-  }
-
-  return res.json({
-    parts,
-    finishReason: candidate?.finishReason,
-    usage: data?.usageMetadata,
-    model,
-  });
 });
 
 app.listen(PORT, () => {
+  const p = activeProvider();
   console.log(`\n➤ Glide backend running on http://localhost:${PORT}`);
-  console.log(`  Model: ${GEMINI_MODEL}`);
+  console.log(`  Provider: ${p.name}   Model: ${p.model}`);
   console.log(`  Health check: http://localhost:${PORT}/health\n`);
 });

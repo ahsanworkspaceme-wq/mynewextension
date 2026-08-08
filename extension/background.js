@@ -26,7 +26,8 @@ const PRICING = {
   "gemini-2.0-flash": { in: 0.1e-6, out: 0.4e-6 },
 };
 function estimateCost(model, usage) {
-  const p = PRICING[model] || PRICING["gemini-2.5-flash"];
+  const p = PRICING[model]; // only estimate for models we have pricing for
+  if (!p) return 0;
   const inTok = usage?.promptTokenCount || 0;
   const outTok = (usage?.candidatesTokenCount || 0) + (usage?.thoughtsTokenCount || 0);
   return inTok * p.in + outTok * p.out;
