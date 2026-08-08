@@ -11,10 +11,7 @@
       <div class="brand">
         <span class="logo">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M4 12h11" />
-            <path d="M13 7l5 5-5 5" />
-            <path d="M3 8h3" opacity="0.6" />
-            <path d="M3 16h3" opacity="0.6" />
+            <path d="M4 12h11" /><path d="M13 7l5 5-5 5" /><path d="M3 8h3" opacity="0.55" /><path d="M3 16h3" opacity="0.55" />
           </svg>
         </span>
         <span class="brand-name">Glide</span>
@@ -22,19 +19,31 @@
       <div class="topbar-actions">
         <select id="modelSelect" class="model-badge" title="Model" hidden></select>
         <span id="usage" class="usage" title="Tokens &amp; approx cost this session" hidden></span>
-        <button id="aiSetup" class="icon-btn" title="AI provider &amp; API key">🔑</button>
-        <button id="exportChat" class="icon-btn" title="Export this chat">📤</button>
-        <button id="saveSkill" class="icon-btn" title="Save last request as a skill">⚡</button>
-        <button id="schedule" class="icon-btn" title="Schedule a saved skill">⏰</button>
-        <button id="newChat" class="icon-btn" title="New chat">＋</button>
-        <button id="openOptions" class="icon-btn" title="Settings">⚙</button>
+        <button id="aiSetup" class="icon-btn" title="AI provider &amp; API key" aria-label="AI setup">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 20 3M16 7l3 3M14 9l2 2"/></svg>
+        </button>
+        <button id="saveSkill" class="icon-btn" title="Save last request as a skill" aria-label="Save skill">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h8l-1 8 10-12h-8z"/></svg>
+        </button>
+        <button id="schedule" class="icon-btn" title="Schedule a saved skill" aria-label="Schedule">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        </button>
+        <button id="exportChat" class="icon-btn" title="Export this chat" aria-label="Export">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+        </button>
+        <button id="newChat" class="icon-btn" title="New chat" aria-label="New chat">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+        <button id="openOptions" class="icon-btn" title="Settings" aria-label="Settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
+        </button>
       </div>
     </header>
 
     <div id="skillsBar" class="skills-bar" hidden></div>
 
     <div id="workingBar" class="working-bar" hidden>
-      <span class="work-spark">✦</span>
+      <span class="work-spark"></span>
       <span id="statusText" class="work-text">Working…</span>
       <button id="stop" class="stop-btn">Stop</button>
     </div>
@@ -43,45 +52,42 @@
       <div class="welcome">
         <div class="welcome-logo">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M4 12h11" />
-            <path d="M13 7l5 5-5 5" />
-            <path d="M3 8h3" opacity="0.6" />
-            <path d="M3 16h3" opacity="0.6" />
+            <path d="M4 12h11" /><path d="M13 7l5 5-5 5" /><path d="M3 8h3" opacity="0.55" /><path d="M3 16h3" opacity="0.55" />
           </svg>
         </div>
         <h1>Glide</h1>
         <p>I read this page, plan tasks, and take actions for you — clicking, typing, and researching across tabs.</p>
         <div class="suggestions">
-          <button class="chip" data-prompt="Summarize this page in a few clear bullet points.">
-            <span class="chip-ic">📄</span> Summarize this page
-          </button>
-          <button class="chip" data-prompt="Make a plan to complete a task on this site, show it to me, then do it after I approve.">
-            <span class="chip-ic">🧠</span> Plan &amp; do a task
-          </button>
-          <button class="chip" data-prompt="Extract the key data on this page as a clean structured list.">
-            <span class="chip-ic">📊</span> Extract key data
-          </button>
+          <button class="chip" data-prompt="Summarize this page in a few clear bullet points.">Summarize this page</button>
+          <button class="chip" data-prompt="Make a plan to complete a task on this site, show it to me, then do it after I approve.">Plan &amp; do a task</button>
+          <button class="chip" data-prompt="Extract the key data on this page as a clean structured list.">Extract key data</button>
         </div>
       </div>
     </main>
 
     <footer class="composer">
       <div class="composer-box">
-        <button id="mic" class="mic-btn" title="Dictate (voice)">🎤</button>
-        <button id="pick" class="mic-btn" title="Pick an element on the page">🎯</button>
-        <textarea id="input" rows="1" placeholder="Ask the agent to do anything…" autocomplete="off"></textarea>
-        <button id="send" class="send-btn" title="Send">➤</button>
+        <button id="mic" class="ghost-btn" title="Dictate (voice)" aria-label="Voice">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+        </button>
+        <button id="pick" class="ghost-btn" title="Pick an element on the page" aria-label="Pick element">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+        </button>
+        <textarea id="input" rows="1" placeholder="Ask Glide to do anything…" autocomplete="off"></textarea>
+        <button id="send" class="send-btn" title="Send" aria-label="Send">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+        </button>
       </div>
       <div class="composer-meta">
-        <button class="ask-pill" id="askPill" title="When should the agent ask before acting?">
+        <label class="ask-pill" title="When should the agent ask before acting?">
           <span class="ask-dot"></span>
           <select id="confirmMode">
             <option value="risky">Ask before acting</option>
             <option value="all">Ask every step</option>
             <option value="off">Act freely</option>
           </select>
-        </button>
-        <span class="disclaimer">Gemini can make mistakes — double-check important actions.</span>
+        </label>
+        <span class="disclaimer">Glide can make mistakes — double-check important actions.</span>
       </div>
     </footer>
 
@@ -90,7 +96,7 @@
       <div class="ob-card">
         <div class="ob-logo">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M4 12h11" /><path d="M13 7l5 5-5 5" /><path d="M3 8h3" opacity="0.6" /><path d="M3 16h3" opacity="0.6" />
+            <path d="M4 12h11" /><path d="M13 7l5 5-5 5" /><path d="M3 8h3" opacity="0.55" /><path d="M3 16h3" opacity="0.55" />
           </svg>
         </div>
         <h2>Set up Glide</h2>
@@ -121,7 +127,7 @@
           <input id="obBackend" type="text" value="http://localhost:8787" />
         </details>
 
-        <button id="obDone" class="ob-done" disabled>Start using Glide →</button>
+        <button id="obDone" class="ob-done" disabled>Start using Glide</button>
       </div>
     </div>
 

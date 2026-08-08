@@ -201,13 +201,13 @@
       top: box.top + "px",
       width: box.width + "px",
       height: box.height + "px",
-      border: "2px solid #7c5cff",
-      background: "rgba(124,92,255,0.18)",
-      borderRadius: "4px",
-      zIndex: "2147483647",
+      border: "2px solid #9b8cff",
+      background: "rgba(155,140,255,0.15)",
+      borderRadius: "6px",
+      zIndex: "2147483646",
       pointerEvents: "none",
-      boxShadow: "0 0 0 2px rgba(79,140,255,0.4)",
-      transition: "opacity 0.35s ease",
+      boxShadow: "0 0 0 3px rgba(155,140,255,0.18)",
+      transition: "opacity 0.4s ease",
     });
     document.documentElement.appendChild(div);
     setTimeout(() => (div.style.opacity = "0"), 250);
@@ -232,6 +232,8 @@
   // ---- animated agent cursor ------------------------------------------------
 
   let cursorEl = null;
+  let cursorX = -100;
+  let cursorY = -100;
   function ensureCursor() {
     if (cursorEl && document.documentElement.contains(cursorEl)) return cursorEl;
     cursorEl = document.createElement("div");
@@ -239,30 +241,58 @@
       position: "fixed",
       left: "0",
       top: "0",
-      width: "20px",
-      height: "20px",
-      background: "#7c5cff",
-      clipPath: "polygon(0 0, 0 75%, 27% 58%, 45% 100%, 62% 90%, 45% 52%, 75% 52%)",
-      filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.5))",
+      width: "22px",
+      height: "22px",
+      background: "#ffffff",
+      clipPath: "polygon(0 0, 0 78%, 24% 60%, 42% 100%, 56% 93%, 39% 55%, 72% 55%)",
+      filter: "drop-shadow(0 0 1px rgba(0,0,0,0.75)) drop-shadow(0 3px 6px rgba(0,0,0,0.35))",
       zIndex: "2147483647",
       pointerEvents: "none",
+      transformOrigin: "top left",
       transform: "translate(-100px,-100px)",
-      transition: "transform 0.35s cubic-bezier(0.22,1,0.36,1)",
-      opacity: "0.95",
+      transition: "transform 0.5s cubic-bezier(0.16,1,0.3,1)",
     });
     document.documentElement.appendChild(cursorEl);
     return cursorEl;
   }
   function moveCursor(x, y) {
     try {
+      cursorX = x;
+      cursorY = y;
       const c = ensureCursor();
-      c.style.transform = `translate(${x - 2}px, ${y - 2}px)`;
+      c.style.transform = `translate(${x - 3}px, ${y - 2}px) scale(1)`;
     } catch (_) {}
   }
   function cursorPress() {
     if (!cursorEl) return;
-    cursorEl.style.background = "#4f8cff";
-    setTimeout(() => cursorEl && (cursorEl.style.background = "#7c5cff"), 200);
+    cursorEl.style.transform = `translate(${cursorX - 3}px, ${cursorY - 2}px) scale(0.82)`;
+    setTimeout(() => {
+      if (cursorEl) cursorEl.style.transform = `translate(${cursorX - 3}px, ${cursorY - 2}px) scale(1)`;
+    }, 130);
+    // expanding ripple ring at the click point
+    try {
+      const ring = document.createElement("div");
+      Object.assign(ring.style, {
+        position: "fixed",
+        left: cursorX + "px",
+        top: cursorY + "px",
+        width: "10px",
+        height: "10px",
+        marginLeft: "-5px",
+        marginTop: "-5px",
+        borderRadius: "50%",
+        border: "2px solid rgba(155,140,255,0.9)",
+        zIndex: "2147483646",
+        pointerEvents: "none",
+        transition: "transform 0.45s ease-out, opacity 0.45s ease-out",
+      });
+      document.documentElement.appendChild(ring);
+      requestAnimationFrame(() => {
+        ring.style.transform = "scale(3.2)";
+        ring.style.opacity = "0";
+      });
+      setTimeout(() => ring.remove(), 480);
+    } catch (_) {}
   }
 
   // ---- drag (for canvas UIs like n8n) ---------------------------------------

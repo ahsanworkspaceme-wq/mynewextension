@@ -280,27 +280,45 @@ const TOOL_LABELS = {
   recall: "Recalling memory",
   wait: "Waiting",
 };
-const TOOL_ICON = {
-  screenshot: "📸",
-  read_pdf: "📄",
-  extract_data: "📊",
-  http_request: "🔌",
-  remember: "💾",
-  recall: "🧠",
-  navigate: "🧭",
-  open_tab: "🗂️",
-  download: "⬇️",
+// Minimal line-icons (inner SVG paths) for the activity feed.
+const ACT_PATHS = {
+  get_page_state: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h6"/>',
+  screenshot: '<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3l2-3h8l2 3h3a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="3.5"/>',
+  click: '<path d="M4 4l7 16 2.2-6.8L20 11z"/>',
+  click_at: '<path d="M4 4l7 16 2.2-6.8L20 11z"/>',
+  type_text: '<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  type_at: '<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  scroll: '<path d="M7 13l5 5 5-5M7 6l5 5 5-5"/>',
+  drag: '<path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/>',
+  navigate: '<circle cx="12" cy="12" r="9"/><path d="M16 8l-2 6-6 2 2-6z"/>',
+  go_back: '<path d="M19 12H5M12 19l-7-7 7-7"/>',
+  open_tab: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/>',
+  switch_tab: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/>',
+  close_tab: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/>',
+  list_tabs: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
+  upload_file: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>',
+  read_pdf: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
+  extract_data: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+  http_request: '<path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20zM2 12h20"/><circle cx="12" cy="12" r="9"/>',
+  remember: '<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>',
+  recall: '<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>',
+  wait: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
 };
+function actIcon(name, declined) {
+  if (declined) return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M5 5l14 14"/></svg>';
+  const inner = ACT_PATHS[name] || '<circle cx="12" cy="12" r="3.2"/>';
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
+}
 
 function renderActivity(name, args, declined) {
   clearWelcome();
   const el = document.createElement("div");
-  el.className = "activity";
+  el.className = "activity" + (declined ? " declined" : "");
   const label = TOOL_LABELS[name] || name;
-  const icon = declined ? "🚫" : TOOL_ICON[name] || "•";
   const argStr = prettyArgs(args);
   el.innerHTML =
-    `<span class="act-icon">${icon}</span>` +
+    `<span class="act-icon">${actIcon(name, declined)}</span>` +
     `<div class="act-body">` +
     `<div class="act-label">${label}${declined ? " · blocked" : ""}</div>` +
     (argStr ? `<div class="act-args">${formatText(argStr)}</div>` : "") +
