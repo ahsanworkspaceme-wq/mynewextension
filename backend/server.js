@@ -5,11 +5,12 @@
 //
 // POST /api/chat  { contents: [...], model? }  ->  { parts, usage, model }
 
+// Load .env BEFORE importing providers.js — ES module imports are hoisted and
+// evaluated first, so providers.js would otherwise read process.env before
+// dotenv populated it. A side-effect import guarantees dotenv runs first.
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
-
-dotenv.config();
 
 import { chat, listModels, defaultModel, PROVIDER, activeProvider } from "./providers.js";
 
