@@ -62,7 +62,9 @@
     "downloads",
     "alarms",
     "notifications",
-    "contextMenus"
+    "contextMenus",
+    "clipboardRead",
+    "clipboardWrite"
   ],
   "optional_permissions": ["debugger"],
   "host_permissions": ["<all_urls>"],

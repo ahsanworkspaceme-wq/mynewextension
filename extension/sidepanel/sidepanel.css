@@ -104,6 +104,7 @@ svg { display: block; }
 }
 .icon-btn svg { width: 17px; height: 17px; }
 .icon-btn:hover { background: var(--bg-hover); color: var(--text); }
+.icon-btn:active { transform: scale(0.9); }
 
 /* ---- Skills bar ---- */
 .skills-bar {
@@ -176,7 +177,19 @@ svg { display: block; }
 .messages::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 8px; }
 .messages::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
 
-.welcome { margin: auto; text-align: center; color: var(--text-dim); max-width: 300px; }
+.welcome { margin: auto; text-align: center; color: var(--text-dim); max-width: 300px; position: relative; }
+.welcome::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -10px;
+  width: 220px;
+  height: 220px;
+  transform: translateX(-50%);
+  background: radial-gradient(circle, rgba(155, 140, 255, 0.16), transparent 65%);
+  pointer-events: none;
+  z-index: -1;
+}
 .welcome-logo {
   display: inline-grid;
   place-items: center;
@@ -186,7 +199,12 @@ svg { display: block; }
   border-radius: 17px;
   background: linear-gradient(140deg, var(--accent), var(--accent-2));
   color: #fff;
-  box-shadow: 0 10px 30px rgba(110, 100, 200, 0.35);
+  box-shadow: 0 10px 30px rgba(110, 100, 200, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  animation: float 4s ease-in-out infinite;
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
 }
 .welcome-logo svg { width: 32px; height: 32px; }
 .welcome h1 { font-size: 20px; color: var(--text); margin: 12px 0 6px; letter-spacing: 0.2px; }
@@ -297,7 +315,8 @@ button:disabled { opacity: 0.5; cursor: default; }
   color: #fff; cursor: pointer; transition: filter 0.13s, opacity 0.13s;
 }
 .send-btn svg { width: 17px; height: 17px; }
-.send-btn:hover:not(:disabled) { filter: brightness(1.1); }
+.send-btn:hover:not(:disabled) { filter: brightness(1.1); box-shadow: 0 3px 12px rgba(155, 140, 255, 0.45); }
+.send-btn:active:not(:disabled) { transform: scale(0.92); }
 .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .composer-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 9px; padding: 0 2px; }
 .ask-pill {

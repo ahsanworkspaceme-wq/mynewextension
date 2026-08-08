@@ -537,6 +537,79 @@
     window.addEventListener("keydown", onKey, true);
   }
 
+  // ---- power tools: run JS, clipboard, keyboard -----------------------------
+
+  function serializeResult(v) {
+    if (v === undefined) return "undefined";
+    if (v === null) return "null";
+    if (typeof v === "string") return v.slice(0, 6000);
+    try {
+      const s = JSON.stringify(v);
+      return (s ?? String(v)).slice(0, 6000);
+    } catch (_) {
+      return String(v).slice(0, 6000);
+    }
+  }
+  // Runs arbitrary JS in the content-script world: full DOM access, immune to the
+  // page's CSP (isolated world). Supports async (returned promises are awaited).
+  async function doExecuteJs(code) {
+    try {
+      const fn = new Function("return (async () => {" + code + "})()");
+      const result = await fn();
+      return { ok: true, result: serializeResult(result) };
+    } catch (err) {
+      return { ok: false, error: String(err?.message || err) };
+    }
+  }
+
+  async function doReadClipboard() {
+    try {
+      const text = await navigator.clipboard.readText();
+      return { ok: true, message: `Clipboard: ${clean(text).slice(0, 200)}`, text };
+    } catch (err) {
+      return { ok: false, error: `Could not read clipboard: ${String(err?.message || err)}` };
+    }
+  }
+  async function doWriteClipboard(text) {
+    try {
+      await navigator.clipboard.writeText(text || "");
+      return { ok: true, message: `Copied to clipboard: "${clean(text).slice(0, 80)}"` };
+    } catch (_) {
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = text || "";
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        ta.remove();
+        return { ok: true, message: `Copied to clipboard (fallback).` };
+      } catch (err) {
+        return { ok: false, error: `Could not write clipboard: ${String(err?.message || err)}` };
+      }
+    }
+  }
+
+  function doPressKeys(combo) {
+    const parts = String(combo || "").split("+").map((s) => s.trim());
+    const key = parts[parts.length - 1];
+    const mods = parts.slice(0, -1).map((m) => m.toLowerCase());
+    const opts = {
+      key,
+      code: key.length === 1 ? "Key" + key.toUpperCase() : key,
+      bubbles: true,
+      cancelable: true,
+      ctrlKey: mods.includes("ctrl") || mods.includes("control"),
+      metaKey: mods.includes("cmd") || mods.includes("meta"),
+      shiftKey: mods.includes("shift"),
+      altKey: mods.includes("alt"),
+    };
+    const el = document.activeElement || document.body;
+    for (const type of ["keydown", "keypress", "keyup"]) el.dispatchEvent(new KeyboardEvent(type, opts));
+    return { ok: true, message: `Pressed ${combo}` };
+  }
+
   // ---- message router -------------------------------------------------------
 
   api.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
@@ -573,6 +646,18 @@
             break;
           case "pick_start":
             startPick(sendResponse);
+            break;
+          case "execute_js":
+            sendResponse(await doExecuteJs(msg.code || ""));
+            break;
+          case "read_clipboard":
+            sendResponse(await doReadClipboard());
+            break;
+          case "write_clipboard":
+            sendResponse(await doWriteClipboard(msg.text || ""));
+            break;
+          case "press_keys":
+            sendResponse(doPressKeys(msg.keys || ""));
             break;
           case "scroll":
             sendResponse(doScroll(msg.direction || "down", msg.pixels));

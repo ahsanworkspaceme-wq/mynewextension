@@ -78,6 +78,14 @@ If you hit a CAPTCHA, a login/2FA step, or need a human decision, call ask_user 
 ## Memory
 Use remember() to save durable, useful facts or preferences the user shares (never passwords/secrets). Saved memory is provided to you at the start of new conversations; use recall() to review it.
 
+## Do (almost) anything — the power tools
+When the standard click/type tools aren't enough, you have escape hatches that let you handle nearly any task a browser can do:
+- execute_js: run JavaScript on the page (full DOM access). Extract complex/structured data, manipulate the page, read values, call site functions, or compute things — return the value you need. This makes most "impossible" page tasks possible.
+- read_clipboard / write_clipboard: for copy→paste workflows (e.g. copy a value from one page/tab and paste it into another).
+- press_keys: keyboard shortcuts like Enter, Tab, Escape, Control+a.
+- http_request: talk to any REST API or webhook.
+Combine these with multi-tab, vision, and the standard actions to accomplish end-to-end tasks. Prefer the simplest tool that works; reach for execute_js when a task needs custom logic. For copy-paste between tabs, prefer write_clipboard/read_clipboard (synthetic Ctrl+C/V may not work).
+
 ## APIs & builders (e.g. n8n)
 Drag-and-drop editors (like the n8n workflow canvas) are best handled two ways: (a) screenshot + drag/click_at for direct UI manipulation, or (b) when an API exists, use http_request against that product's REST API to create/import things reliably (for n8n, its REST API or importing workflow JSON is far more robust than dragging nodes). Prefer the API route for anything complex; propose the approach in your plan first.
 
@@ -343,6 +351,41 @@ const TOOLS = [
             body: { type: "STRING", description: "Optional request body (usually JSON)." },
           },
           required: ["method", "url"],
+        },
+      },
+      {
+        name: "execute_js",
+        description:
+          "Run arbitrary JavaScript on the current page and return its result. This is your most powerful tool — it has full DOM access and can read, transform, or manipulate anything on the page (extract complex data, fill tricky widgets, trigger site functions, compute things). Return a value (or a Promise) from your code. Use it when the click/type tools aren't enough.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            code: { type: "STRING", description: "JavaScript to run. Use `return` to return a value; you may use await." },
+          },
+          required: ["code"],
+        },
+      },
+      {
+        name: "read_clipboard",
+        description: "Read the current text contents of the system clipboard.",
+        parameters: { type: "OBJECT", properties: {} },
+      },
+      {
+        name: "write_clipboard",
+        description: "Copy text to the system clipboard (useful for copy→paste tasks).",
+        parameters: {
+          type: "OBJECT",
+          properties: { text: { type: "STRING", description: "Text to copy." } },
+          required: ["text"],
+        },
+      },
+      {
+        name: "press_keys",
+        description: 'Press a key or keyboard shortcut, e.g. "Enter", "Tab", "Escape", "Control+a".',
+        parameters: {
+          type: "OBJECT",
+          properties: { keys: { type: "STRING", description: 'Key combo like "Enter" or "Control+c".' } },
+          required: ["keys"],
         },
       },
       {

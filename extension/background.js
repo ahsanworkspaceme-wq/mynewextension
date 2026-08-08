@@ -569,6 +569,24 @@ async function executeTool(ctx, name, args, config) {
         return { result: `Request failed: ${String(err?.message || err)}` };
       }
     }
+    case "execute_js": {
+      const res = await sendToTab(tabId, { type: "execute_js", code: args.code });
+      await delay(200);
+      return { result: res?.ok ? `JS result: ${res.result}` : `JS error: ${res?.error}` };
+    }
+    case "read_clipboard": {
+      const res = await sendToTab(tabId, { type: "read_clipboard" });
+      return { result: res?.ok ? `Clipboard contents:\n${res.text ?? ""}` : `Failed: ${res?.error}` };
+    }
+    case "write_clipboard": {
+      const res = await sendToTab(tabId, { type: "write_clipboard", text: args.text });
+      return { result: res?.ok ? res.message : `Failed: ${res?.error}` };
+    }
+    case "press_keys": {
+      const res = await sendToTab(tabId, { type: "press_keys", keys: args.keys });
+      await delay(200);
+      return { result: res?.ok ? res.message : `Failed: ${res?.error}` };
+    }
     case "wait": {
       const secs = Math.min(Number(args.seconds) || 1, 8);
       await delay(secs * 1000);
@@ -586,7 +604,7 @@ async function settle(tabId, timeout = 8000) {
 
 // ---- gating: risk, blocked sites, per-site access ---------------------------
 
-const ACTION_TOOLS = ["click", "click_at", "type_text", "type_at", "navigate", "go_back", "upload_file", "open_tab", "drag", "http_request", "download"];
+const ACTION_TOOLS = ["click", "click_at", "type_text", "type_at", "navigate", "go_back", "upload_file", "open_tab", "drag", "http_request", "download", "execute_js", "write_clipboard", "press_keys"];
 
 function isActionTool(name) {
   return ACTION_TOOLS.includes(name);
@@ -594,6 +612,7 @@ function isActionTool(name) {
 
 function needsConfirm(name, args, mode) {
   if (mode === "off") return false;
+  if (name === "execute_js") return true; // arbitrary code — always confirm
   if (name === "http_request" && args?.method && !["GET", "HEAD"].includes(String(args.method).toUpperCase())) return true;
   if (mode === "all") return isActionTool(name);
   if (name === "navigate" || name === "open_tab") return true;
@@ -623,6 +642,12 @@ function confirmDetail(name, args) {
       return `${(args.method || "GET").toUpperCase()} request to: ${args.url}`;
     case "download":
       return `Download: ${args.url}`;
+    case "execute_js":
+      return `Run JavaScript on the page:\n${String(args.code || "").slice(0, 200)}`;
+    case "write_clipboard":
+      return `Copy to clipboard: "${String(args.text || "").slice(0, 80)}"`;
+    case "press_keys":
+      return `Press keys: ${args.keys}`;
     default:
       return name;
   }

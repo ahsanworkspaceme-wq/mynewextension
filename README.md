@@ -41,6 +41,9 @@ extension, so your key stays secure.
   future chats.
 - ⚡ **Skills & schedules** — save a request as a reusable skill (⚡) and schedule
   it to run on an interval (⏰).
+- 🧪 **Do almost anything** — `execute_js` runs custom JavaScript on the page
+  (full DOM access), plus **clipboard** read/write and **keyboard** shortcuts, so
+  it can handle tasks the click/type tools can't.
 - 🔌 **API connector** — `http_request` lets it call REST APIs/webhooks (e.g. build
   an **n8n** workflow via the n8n API — more reliable than dragging nodes).
 - 📄 **PDF & structured data** — reads PDFs and extracts tables/lists/links.
