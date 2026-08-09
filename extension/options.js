@@ -10,6 +10,7 @@ const saved = document.getElementById("saved");
 const n8nUrl = document.getElementById("n8nUrl");
 const n8nApiKey = document.getElementById("n8nApiKey");
 const n8nStatus = document.getElementById("n8nStatus");
+const language = document.getElementById("language");
 
 // ---- Fill Profile -----------------------------------------------------------
 const PROFILE_FIELDS = ["pfName", "pfFirstName", "pfLastName", "pfEmail", "pfPhone", "pfAddress", "pfCity", "pfState", "pfZip", "pfCountry"];
@@ -93,6 +94,7 @@ async function load() {
     "nativeInput",
     "n8nUrl",
     "n8nApiKey",
+    "language",
   ]);
   backendUrl.value = cfg.backendUrl || "http://localhost:8787";
   maxSteps.value = cfg.maxSteps || 20;
@@ -103,6 +105,7 @@ async function load() {
   nativeInput.checked = !!cfg.nativeInput;
   n8nUrl.value = cfg.n8nUrl || "http://localhost:5678";
   n8nApiKey.value = cfg.n8nApiKey || "";
+  language.value = cfg.language || "en";
 }
 
 // Requesting the debugger permission needs a user gesture — do it on toggle.
@@ -134,6 +137,7 @@ document.getElementById("save").addEventListener("click", async () => {
     nativeInput: !!nativeInput.checked,
     n8nUrl: n8nUrl.value.trim().replace(/\/+$/, "") || "http://localhost:5678",
     n8nApiKey: n8nApiKey.value.trim(),
+    language: language.value || "en",
   });
   saved.classList.add("show");
   setTimeout(() => saved.classList.remove("show"), 1500);

@@ -1087,3 +1087,22 @@ renderSkills();
 maybeOnboard();
 loadPendingAsk();
 els.input.focus();
+
+// ---- i18n language support ---------------------------------------------------
+async function applyTranslations() {
+  if (typeof I18N === "undefined") return;
+  await I18N.init();
+  // Update key UI elements
+  els.input.placeholder = I18N.t("input_placeholder");
+  document.querySelector(".disclaimer").textContent = I18N.t("disclaimer");
+  document.querySelector(".welcome h1").textContent = I18N.t("welcome_title");
+  document.querySelector(".welcome p").textContent = I18N.t("welcome_desc");
+  // Update chips
+  const chips = document.querySelectorAll(".welcome .chip");
+  if (chips[0]) chips[0].textContent = I18N.t("chip_summarize");
+  if (chips[1]) chips[1].textContent = I18N.t("chip_plan");
+  if (chips[2]) chips[2].textContent = I18N.t("chip_extract");
+}
+applyTranslations();
+// Listen for language changes
+window.addEventListener("languageChanged", () => applyTranslations());
