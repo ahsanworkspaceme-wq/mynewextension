@@ -269,30 +269,33 @@
 
   const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  // ---- animated agent cursor ------------------------------------------------
+  // ---- animated agent cursor (Claude-style) -----------------------------------
 
   let cursorEl = null;
   let cursorX = -100;
   let cursorY = -100;
+  let glowBorderEl = null;
 
   function ensureCursor() {
     if (cursorEl && document.documentElement.contains(cursorEl)) return cursorEl;
     cursorEl = document.createElement("div");
+    cursorEl.id = "glide-agent-cursor";
     Object.assign(cursorEl.style, {
       position: "fixed",
       left: "0px",
       top: "0px",
-      width: "24px",
-      height: "24px",
-      background: "#ffffff",
-      clipPath: "polygon(0 0, 0 78%, 24% 60%, 42% 100%, 56% 93%, 39% 55%, 72% 55%)",
-      filter: "drop-shadow(0 0 2px rgba(0,0,0,0.9)) drop-shadow(0 4px 8px rgba(0,0,0,0.4))",
+      width: "20px",
+      height: "20px",
+      background: "#da7756",
+      clipPath: "polygon(0 0, 0 82%, 28% 60%, 44% 100%, 58% 92%, 40% 56%, 76% 52%)",
+      filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.5)) drop-shadow(0 3px 6px rgba(0,0,0,0.3))",
       zIndex: "2147483647",
       pointerEvents: "none",
-      transformOrigin: "top left",
-      transform: "translate(-200px, -200px)",
-      transition: "transform 0.3s ease-out",
-      opacity: "1",
+      transformOrigin: "2px 2px",
+      transform: "translate(-200px, -200px) scale(1)",
+      transition: "transform 0.35s cubic-bezier(0.33, 1, 0.68, 1), opacity 0.2s ease",
+      opacity: "0",
+      willChange: "transform",
     });
     document.documentElement.appendChild(cursorEl);
     return cursorEl;
@@ -303,21 +306,103 @@
       cursorX = x;
       cursorY = y;
       const c = ensureCursor();
-      // Force reflow to ensure cursor is visible
-      c.style.display = "none";
-      c.offsetHeight; // trigger reflow
-      c.style.display = "";
-      c.style.transform = `translate(${x - 3}px, ${y - 2}px) scale(1)`;
       c.style.opacity = "1";
-    } catch (e) {
-      // If cursor fails, recreate it
+      c.style.transform = `translate(${x}px, ${y}px) scale(1)`;
+    } catch (_) {
       cursorEl = null;
       try {
         const c = ensureCursor();
-        c.style.transform = `translate(${x - 3}px, ${y - 2}px) scale(1)`;
         c.style.opacity = "1";
+        c.style.transform = `translate(${x}px, ${y}px) scale(1)`;
       } catch (_) {}
     }
+  }
+
+  function cursorPress() {
+    if (!cursorEl) return;
+    cursorEl.style.transform = `translate(${cursorX}px, ${cursorY}px) scale(0.82)`;
+    setTimeout(() => {
+      if (cursorEl) cursorEl.style.transform = `translate(${cursorX}px, ${cursorY}px) scale(1)`;
+    }, 120);
+    // Expanding ripple ring at click point
+    try {
+      const ring = document.createElement("div");
+      Object.assign(ring.style, {
+        position: "fixed",
+        left: cursorX + "px",
+        top: cursorY + "px",
+        width: "12px",
+        height: "12px",
+        marginLeft: "-6px",
+        marginTop: "-6px",
+        borderRadius: "50%",
+        border: "2px solid rgba(218, 119, 86, 0.9)",
+        zIndex: "2147483646",
+        pointerEvents: "none",
+        transition: "transform 0.4s ease-out, opacity 0.4s ease-out",
+      });
+      document.documentElement.appendChild(ring);
+      requestAnimationFrame(() => {
+        ring.style.transform = "scale(3.5)";
+        ring.style.opacity = "0";
+      });
+      setTimeout(() => ring.remove(), 450);
+    } catch (_) {}
+  }
+
+  // ---- Glow border (Claude-style) -------------------------------------------
+  function showGlowBorder() {
+    if (glowBorderEl && document.documentElement.contains(glowBorderEl)) return;
+    glowBorderEl = document.createElement("div");
+    glowBorderEl.id = "glide-glow-border";
+    Object.assign(glowBorderEl.style, {
+      position: "fixed",
+      inset: "0",
+      border: "2px solid rgba(218, 119, 86, 0.6)",
+      borderRadius: "0",
+      boxShadow: "inset 0 0 30px rgba(218, 119, 86, 0.15)",
+      zIndex: "2147483645",
+      pointerEvents: "none",
+      opacity: "0",
+      transition: "opacity 0.4s ease",
+    });
+    document.documentElement.appendChild(glowBorderEl);
+    requestAnimationFrame(() => { glowBorderEl.style.opacity = "1"; });
+  }
+
+  function hideGlowBorder() {
+    if (!glowBorderEl) return;
+    glowBorderEl.style.opacity = "0";
+    setTimeout(() => { glowBorderEl?.remove(); glowBorderEl = null; }, 400);
+  }
+
+  // ---- Stop pill (Claude-style) ---------------------------------------------
+  function showStopPill() {
+    if (document.getElementById("glide-stop-pill")) return;
+    const pill = document.createElement("div");
+    pill.id = "glide-stop-pill";
+    Object.assign(pill.style.cssText, `
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background: rgba(30, 28, 25, 0.9); color: #f6f3ee; border: 1px solid rgba(218,119,86,0.4);
+      padding: 8px 20px; border-radius: 20px; font: 500 13px system-ui, sans-serif;
+      cursor: pointer; z-index: 2147483646; pointer-events: auto;
+      backdrop-filter: blur(8px); transition: all 0.2s ease;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    `);
+    pill.textContent = "⏹ Stop Glide";
+    pill.addEventListener("mouseenter", () => { pill.style.background = "rgba(226, 122, 99, 0.9)"; pill.style.color = "#fff"; });
+    pill.addEventListener("mouseleave", () => { pill.style.background = "rgba(30, 28, 25, 0.9)"; pill.style.color = "#f6f3ee"; });
+    pill.addEventListener("click", () => {
+      api.runtime.sendMessage({ type: "stop_agent" }).catch(() => {});
+      pill.remove();
+      hideGlowBorder();
+    });
+    document.documentElement.appendChild(pill);
+  }
+
+  function hideStopPill() {
+    const pill = document.getElementById("glide-stop-pill");
+    if (pill) pill.remove();
   }
     } catch (_) {}
   }
@@ -971,6 +1056,16 @@
         switch (msg?.type) {
           case "ping":
             sendResponse({ ok: true, pong: true });
+            break;
+          case "show_glow":
+            showGlowBorder();
+            showStopPill();
+            sendResponse({ ok: true });
+            break;
+          case "hide_glow":
+            hideGlowBorder();
+            hideStopPill();
+            sendResponse({ ok: true });
             break;
           case "get_state":
             sendResponse({ ok: true, state: collectState() });

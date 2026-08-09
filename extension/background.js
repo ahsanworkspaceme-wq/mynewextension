@@ -1164,8 +1164,15 @@ api.runtime.onConnect.addListener((port) => {
       }
       return;
     }
-    if (msg?.type === "interrupt") {
+    if (msg?.type === "interrupt" || msg?.type === "stop_agent") {
       interrupted = true;
+      // Hide glow border and stop pill on active tab
+      try {
+        const active = await getActiveTab();
+        if (active) {
+          await sendToTab(active.id, { type: "hide_glow" }).catch(() => {});
+        }
+      } catch (_) {}
       return;
     }
     if (msg?.type === "reset") {
@@ -1251,6 +1258,11 @@ api.runtime.onConnect.addListener((port) => {
         }
         steps++;
         send({ type: "thinking" });
+        // Show glow border + stop pill on active tab
+        try {
+          const active = await getActiveTab();
+          if (active) await sendToTab(active.id, { type: "show_glow" }).catch(() => {});
+        } catch (_) {}
 
         let data;
         try {
@@ -1389,6 +1401,11 @@ api.runtime.onConnect.addListener((port) => {
       send({ type: "error", text: String(err?.message || err) });
     } finally {
       busy = false;
+      // Hide glow border + stop pill when done
+      try {
+        const active = await getActiveTab();
+        if (active) await sendToTab(active.id, { type: "hide_glow" }).catch(() => {});
+      } catch (_) {}
       send({ type: "done" });
     }
   }
