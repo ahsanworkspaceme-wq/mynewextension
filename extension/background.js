@@ -800,6 +800,82 @@ async function executeTool(ctx, name, args, config) {
       return { result: `Replayed workflow "${wf.name}" (${wf.steps.length} steps).` };
     }
 
+    // ---- n8n workflow builder tools -------------------------------------------
+    case "n8n_create_workflow": {
+      const s = await api.storage.local.get(["n8nUrl", "n8nApiKey"]);
+      const n8nUrl = (s.n8nUrl || "").replace(/\/+$/, "");
+      const n8nKey = s.n8nApiKey || "";
+      if (!n8nUrl || !n8nKey) return { result: "n8n not configured. Go to Settings → n8n Configuration and enter your n8n URL and API key." };
+      try {
+        const resp = await fetch(`${n8nUrl}/api/v1/workflows`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-N8N-API-KEY": n8nKey },
+          body: JSON.stringify({ name: args.name, nodes: args.nodes || [], connections: args.connections || {} }),
+        });
+        const data = await resp.json();
+        if (!resp.ok) return { result: `n8n error: ${data.message || resp.status}` };
+        return { result: `Workflow created! ID: ${data.id}, Name: "${data.name}". URL: ${n8nUrl}/workflow/${data.id}` };
+      } catch (err) {
+        return { result: `Failed to connect to n8n: ${String(err.message || err)}` };
+      }
+    }
+    case "n8n_list_workflows": {
+      const s = await api.storage.local.get(["n8nUrl", "n8nApiKey"]);
+      const n8nUrl = (s.n8nUrl || "").replace(/\/+$/, "");
+      const n8nKey = s.n8nApiKey || "";
+      if (!n8nUrl || !n8nKey) return { result: "n8n not configured. Go to Settings → n8n Configuration." };
+      try {
+        const resp = await fetch(`${n8nUrl}/api/v1/workflows`, {
+          headers: { "X-N8N-API-KEY": n8nKey },
+        });
+        const data = await resp.json();
+        if (!resp.ok) return { result: `n8n error: ${data.message || resp.status}` };
+        const wfs = data.data || [];
+        if (!wfs.length) return { result: "No workflows found in n8n." };
+        return { result: `n8n workflows (${wfs.length}):\n${wfs.map((w) => `- ${w.name} (ID: ${w.id}, active: ${w.active})`).join("\n")}` };
+      } catch (err) {
+        return { result: `Failed to connect to n8n: ${String(err.message || err)}` };
+      }
+    }
+    case "n8n_get_workflow": {
+      const s = await api.storage.local.get(["n8nUrl", "n8nApiKey"]);
+      const n8nUrl = (s.n8nUrl || "").replace(/\/+$/, "");
+      const n8nKey = s.n8nApiKey || "";
+      if (!n8nUrl || !n8nKey) return { result: "n8n not configured." };
+      try {
+        const resp = await fetch(`${n8nUrl}/api/v1/workflows/${args.id}`, {
+          headers: { "X-N8N-API-KEY": n8nKey },
+        });
+        const data = await resp.json();
+        if (!resp.ok) return { result: `n8n error: ${data.message || resp.status}` };
+        return { result: `Workflow "${data.name}" (ID: ${data.id}):\nNodes: ${(data.nodes || []).length}\nActive: ${data.active}\nNodes: ${(data.nodes || []).map((n) => `  - ${n.name} (${n.type})`).join("\n")}` };
+      } catch (err) {
+        return { result: `Failed to connect to n8n: ${String(err.message || err)}` };
+      }
+    }
+    case "n8n_update_workflow": {
+      const s = await api.storage.local.get(["n8nUrl", "n8nApiKey"]);
+      const n8nUrl = (s.n8nUrl || "").replace(/\/+$/, "");
+      const n8nKey = s.n8nApiKey || "";
+      if (!n8nUrl || !n8nKey) return { result: "n8n not configured." };
+      try {
+        const body = {};
+        if (args.name) body.name = args.name;
+        if (args.nodes) body.nodes = args.nodes;
+        if (args.connections) body.connections = args.connections;
+        const resp = await fetch(`${n8nUrl}/api/v1/workflows/${args.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", "X-N8N-API-KEY": n8nKey },
+          body: JSON.stringify(body),
+        });
+        const data = await resp.json();
+        if (!resp.ok) return { result: `n8n error: ${data.message || resp.status}` };
+        return { result: `Workflow updated! ID: ${data.id}, Name: "${data.name}"` };
+      } catch (err) {
+        return { result: `Failed to connect to n8n: ${String(err.message || err)}` };
+      }
+    }
+
     default:
       return { result: `Unknown tool: ${name}` };
   }

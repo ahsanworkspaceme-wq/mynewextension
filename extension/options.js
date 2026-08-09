@@ -7,6 +7,9 @@ const siteAccess = document.getElementById("siteAccess");
 const blockedSites = document.getElementById("blockedSites");
 const nativeInput = document.getElementById("nativeInput");
 const saved = document.getElementById("saved");
+const n8nUrl = document.getElementById("n8nUrl");
+const n8nApiKey = document.getElementById("n8nApiKey");
+const n8nStatus = document.getElementById("n8nStatus");
 
 // ---- Fill Profile -----------------------------------------------------------
 const PROFILE_FIELDS = ["pfName", "pfFirstName", "pfLastName", "pfEmail", "pfPhone", "pfAddress", "pfCity", "pfState", "pfZip", "pfCountry"];
@@ -88,6 +91,8 @@ async function load() {
     "siteAccess",
     "blockedSites",
     "nativeInput",
+    "n8nUrl",
+    "n8nApiKey",
   ]);
   backendUrl.value = cfg.backendUrl || "http://localhost:8787";
   maxSteps.value = cfg.maxSteps || 20;
@@ -96,6 +101,8 @@ async function load() {
   blockedSites.value =
     cfg.blockedSites ?? "chase.com, bankofamerica.com, wellsfargo.com, paypal.com, coinbase.com";
   nativeInput.checked = !!cfg.nativeInput;
+  n8nUrl.value = cfg.n8nUrl || "http://localhost:5678";
+  n8nApiKey.value = cfg.n8nApiKey || "";
 }
 
 // Requesting the debugger permission needs a user gesture — do it on toggle.
@@ -125,9 +132,40 @@ document.getElementById("save").addEventListener("click", async () => {
     siteAccess: siteAccess.value || "all",
     blockedSites: blockedSites.value.trim(),
     nativeInput: !!nativeInput.checked,
+    n8nUrl: n8nUrl.value.trim().replace(/\/+$/, "") || "http://localhost:5678",
+    n8nApiKey: n8nApiKey.value.trim(),
   });
   saved.classList.add("show");
   setTimeout(() => saved.classList.remove("show"), 1500);
+});
+
+// Test n8n connection
+document.getElementById("testN8n").addEventListener("click", async () => {
+  const url = n8nUrl.value.trim().replace(/\/+$/, "");
+  const key = n8nApiKey.value.trim();
+  if (!url || !key) {
+    n8nStatus.textContent = "✕ Enter URL and API key";
+    n8nStatus.style.color = "#e27a63";
+    return;
+  }
+  n8nStatus.textContent = "Testing…";
+  n8nStatus.style.color = "";
+  try {
+    const resp = await fetch(`${url}/api/v1/workflows`, {
+      headers: { "X-N8N-API-KEY": key },
+    });
+    if (resp.ok) {
+      n8nStatus.textContent = "✓ Connected!";
+      n8nStatus.style.color = "#22c55e";
+    } else {
+      const data = await resp.json().catch(() => ({}));
+      n8nStatus.textContent = `✕ ${data.message || resp.status}`;
+      n8nStatus.style.color = "#e27a63";
+    }
+  } catch (err) {
+    n8nStatus.textContent = `✕ ${String(err.message || err).slice(0, 40)}`;
+    n8nStatus.style.color = "#e27a63";
+  }
 });
 
 load();

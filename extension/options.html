@@ -180,6 +180,23 @@
     </div>
     <span id="profileSaved" style="color: #22c55e; font-size: 13px; opacity: 0; transition: opacity 0.2s;">✓ Saved</span>
 
+    <hr style="margin: 30px 0; border: none; border-top: 1px solid #8884;" />
+    <h2 style="font-size: 18px; margin-bottom: 8px;">⚡ n8n Workflow Builder</h2>
+    <p class="hint" style="margin-top: 0;">Connect to your n8n instance to create and manage workflows via AI.</p>
+
+    <label for="n8nUrl">n8n URL</label>
+    <input id="n8nUrl" type="text" placeholder="http://localhost:5678" />
+    <div class="hint">Your n8n instance URL. Default: <code>http://localhost:5678</code></div>
+
+    <label for="n8nApiKey">n8n API Key</label>
+    <input id="n8nApiKey" type="password" placeholder="Paste your n8n API key here" />
+    <div class="hint">Get it from n8n Settings → API → Create API Key</div>
+
+    <div style="display: flex; gap: 10px; margin-top: 16px;">
+      <button id="testN8n" style="flex: 1; margin-top: 0; background: var(--bg-input); color: var(--text); border: 1px solid #8884;">Test Connection</button>
+      <span id="n8nStatus" style="display: flex; align-items: center; font-size: 13px;"></span>
+    </div>
+
     <div>
       <button id="save">Save</button>
       <span id="saved">✓ Saved</span>
