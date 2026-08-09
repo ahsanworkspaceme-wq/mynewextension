@@ -201,12 +201,12 @@
       top: box.top + "px",
       width: box.width + "px",
       height: box.height + "px",
-      border: "2px solid #9b8cff",
-      background: "rgba(155,140,255,0.15)",
+      border: "2px solid #da7756",
+      background: "rgba(218,119,86,0.15)",
       borderRadius: "6px",
       zIndex: "2147483646",
       pointerEvents: "none",
-      boxShadow: "0 0 0 3px rgba(155,140,255,0.18)",
+      boxShadow: "0 0 0 3px rgba(218,119,86,0.18)",
       transition: "opacity 0.4s ease",
     });
     document.documentElement.appendChild(div);
@@ -281,7 +281,7 @@
         marginLeft: "-5px",
         marginTop: "-5px",
         borderRadius: "50%",
-        border: "2px solid rgba(155,140,255,0.9)",
+        border: "2px solid rgba(218,119,86,0.9)",
         zIndex: "2147483646",
         pointerEvents: "none",
         transition: "transform 0.45s ease-out, opacity 0.45s ease-out",
@@ -436,13 +436,47 @@
     return { ok: true, message: `Clicked [${index}] ${describe(el)}` };
   }
 
+  // Find the closest interactive element from the registry near (x, y).
+  function findNearestElement(x, y, maxDist = 80) {
+    let best = null, bestDist = Infinity;
+    for (const el of registry) {
+      const r = el.getBoundingClientRect();
+      const cx = r.left + r.width / 2;
+      const cy = r.top + r.height / 2;
+      const d = Math.hypot(cx - x, cy - y);
+      if (d < bestDist) { bestDist = d; best = el; }
+    }
+    return bestDist <= maxDist ? best : null;
+  }
+
   async function doClickAt(x, y) {
+    // Clamp coordinates to visible viewport
+    const vw = window.innerWidth, vh = window.innerHeight;
+    x = Math.max(0, Math.min(Math.round(x), vw));
+    y = Math.max(0, Math.min(Math.round(y), vh));
+
     highlightPoint(x, y);
     await pause(350);
-    const el = deepElementFromPoint(x, y);
-    if (!el) return { ok: false, error: `No element at (${x}, ${y}).` };
+
+    // 1) Try exact hit at coordinates
+    let el = deepElementFromPoint(x, y);
+    let method = "exact";
+
+    // 2) If no element or hit a non-interactive wrapper, expand search
+    if (!el || (!el.closest(INTERACTIVE_SELECTOR) && el.tagName !== "A" && el.tagName !== "BUTTON")) {
+      const nearby = findNearestElement(x, y, 60);
+      if (nearby) { el = nearby; method = "nearest"; }
+    }
+
+    // 3) Final fallback: broad search
+    if (!el) {
+      el = findNearestElement(x, y, 120);
+      method = "fallback";
+    }
+
+    if (!el) return { ok: false, error: `No element found near (${x}, ${y}). Try get_page_state and use click(index) instead.` };
     synthClick(el, x, y);
-    return { ok: true, message: `Clicked at (${x}, ${y}) → ${describe(el)}` };
+    return { ok: true, message: `Clicked at (${x}, ${y}) [${method}] → ${describe(el)}` };
   }
 
   async function doType(index, text, submit) {
@@ -456,12 +490,22 @@
   }
 
   async function doTypeAt(x, y, text, submit) {
+    const vw = window.innerWidth, vh = window.innerHeight;
+    x = Math.max(0, Math.min(Math.round(x), vw));
+    y = Math.max(0, Math.min(Math.round(y), vh));
+
     highlightPoint(x, y);
     await pause(300);
-    const el = deepElementFromPoint(x, y);
-    if (!el) return { ok: false, error: `No element at (${x}, ${y}).` };
+
+    let el = deepElementFromPoint(x, y);
+    if (!el || (!el.closest(INTERACTIVE_SELECTOR) && el.tagName !== "A" && el.tagName !== "BUTTON")) {
+      const nearby = findNearestElement(x, y, 60);
+      if (nearby) el = nearby;
+    }
+    if (!el) el = findNearestElement(x, y, 120);
+    if (!el) return { ok: false, error: `No typable element found near (${x}, ${y}). Try get_page_state and use type_text(index) instead.` };
     synthClick(el, x, y);
-    if (!typeInto(el, text, submit)) return { ok: false, error: `Element at (${x}, ${y}) is not typable.` };
+    if (!typeInto(el, text, submit)) return { ok: false, error: `Element near (${x}, ${y}) is not typable.` };
     return { ok: true, message: `Typed "${clean(text)}" at (${x}, ${y})${submit ? " and submitted" : ""}` };
   }
 
@@ -478,8 +522,8 @@
     const box = document.createElement("div");
     Object.assign(box.style, {
       position: "fixed",
-      border: "2px solid #8b6dff",
-      background: "rgba(139,109,255,0.15)",
+      border: "2px solid #da7756",
+      background: "rgba(218,119,86,0.15)",
       borderRadius: "3px",
       zIndex: "2147483647",
       pointerEvents: "none",

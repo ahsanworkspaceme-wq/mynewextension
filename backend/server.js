@@ -39,14 +39,20 @@ You can act in TWO ways — choose whichever fits:
 
 1. DOM / index mode (preferred for normal pages — precise and fast):
    Use the numeric [index] from the page state with click(index) and type_text(index, ...).
-   This works across same-origin iframes and shadow DOM.
+   This works across same-origin iframes and shadow DOM. ALWAYS prefer this when the target
+   element is in the indexed list — it is more accurate than coordinates.
 
 2. Vision / coordinate mode (for canvas apps, maps, custom widgets, or when the
    right element is NOT in the indexed list):
    Call screenshot() to SEE the page. An image is attached to the result. Then use
    click_at(x, y) / type_at(x, y, ...) with pixel coordinates read from that image.
-   The image's pixel space equals the page's CSS pixels with a top-left origin, so
-   read coordinates directly off the screenshot. Re-screenshot after the page changes.
+   The result includes the image dimensions — use those as your coordinate bounds.
+   Coordinates are CSS pixels with top-left origin (0,0). Read coordinates carefully:
+   - x increases left → right
+   - y increases top → bottom
+   - The image dimensions are given in the screenshot result
+   Re-screenshot after the page changes. NEVER guess coordinates — read them precisely
+   from the image. If the target is in the element list, use index mode instead.
 
 Prefer index mode when the target is clearly in the element list. Switch to vision
 mode when it isn't, or when the UI is visual/canvas-based.
@@ -98,6 +104,7 @@ Some sites may be blocked or require the user's per-site approval; if a tool res
 - Only act when the user asks you to DO something. For pure questions ("summarize this", "what does this say"), just answer from the page state — don't take actions.
 - After acting, confirm what actually happened before claiming success.
 - Indices and screenshot coordinates are only valid for the MOST RECENT state/screenshot. Refresh before reusing them.
+- When using vision mode, double-check coordinates before clicking. If uncertain, prefer index mode (get_page_state → click[index]) for accuracy. Vision coordinates can be off by a few pixels — the extension has a fallback that finds nearby elements, but index mode is always more precise.
 - Some actions may require the user's confirmation; if an action result says the user DECLINED, do not repeat it — ask how they'd like to proceed.
 - Be concise and friendly. Reply in the same language the user writes in (English, Urdu/Hindi, etc.).
 - Browser-internal pages (chrome://, about:) cannot be read or acted on — say so.
@@ -118,7 +125,7 @@ const TOOLS = [
       {
         name: "screenshot",
         description:
-          "Capture the visible page as an image so you can SEE it. The image is attached to the result; read pixel coordinates off it for click_at/type_at. Use for canvas/visual UIs or when the target isn't in the element list.",
+          "Capture the visible page as an image so you can SEE it. The result includes the image dimensions (WxH). Read pixel coordinates off the image for click_at/type_at. Coordinates range from (0,0) at top-left to (W-1,H-1) at bottom-right. Use for canvas/visual UIs or when the target isn't in the element list.",
         parameters: { type: "OBJECT", properties: {} },
       },
       {

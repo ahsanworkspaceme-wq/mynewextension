@@ -1,34 +1,34 @@
 :root {
-  --bg: #18181b;
-  --bg-elev: #1f1f23;
-  --bg-input: #27272c;
-  --bg-hover: #2c2c32;
+  --bg: #201d19;
+  --bg-elev: #282420;
+  --bg-input: #332e28;
+  --bg-hover: #39332c;
   --border: rgba(255, 255, 255, 0.07);
   --border-strong: rgba(255, 255, 255, 0.12);
-  --text: #ededf0;
-  --text-2: #b3b3ba;
-  --text-dim: #7d7d86;
-  --accent: #9b8cff;
-  --accent-2: #6ea8fe;
-  --accent-soft: rgba(155, 140, 255, 0.14);
-  --user-bubble: #2a2a30;
-  --danger: #f2777a;
-  --ok: #4ade80;
+  --text: #f6f3ee;
+  --text-2: #bdb5a8;
+  --text-dim: #857c6d;
+  --accent: #da7756;
+  --accent-2: #e6a06b;
+  --accent-soft: rgba(218, 119, 86, 0.14);
+  --user-bubble: #353029;
+  --danger: #e27a63;
+  --ok: #7ccb83;
   --radius: 14px;
 }
 @media (prefers-color-scheme: light) {
   :root {
-    --bg: #ffffff;
-    --bg-elev: #fafafa;
-    --bg-input: #f1f1f4;
-    --bg-hover: #ebebef;
-    --border: rgba(0, 0, 0, 0.08);
-    --border-strong: rgba(0, 0, 0, 0.14);
-    --text: #1b1b1f;
-    --text-2: #45454d;
-    --text-dim: #82828b;
-    --accent-soft: rgba(124, 92, 255, 0.12);
-    --user-bubble: #f0f0f4;
+    --bg: #fdfbf8;
+    --bg-elev: #f7f3ec;
+    --bg-input: #f0ebe2;
+    --bg-hover: #eae4d8;
+    --border: rgba(80, 65, 45, 0.09);
+    --border-strong: rgba(80, 65, 45, 0.15);
+    --text: #2e2a24;
+    --text-2: #5a534a;
+    --text-dim: #8d8475;
+    --accent-soft: rgba(218, 119, 86, 0.12);
+    --user-bubble: #f1ebdf;
   }
 }
 
@@ -68,7 +68,7 @@ svg { display: block; }
   color: #fff;
 }
 .logo svg { width: 15px; height: 15px; }
-.brand-name { font-weight: 600; letter-spacing: 0.2px; font-size: 15px; }
+.brand-name { font-weight: 700; letter-spacing: -0.2px; font-size: 15px; }
 .topbar-actions { display: flex; align-items: center; gap: 1px; }
 .model-badge {
   appearance: none;
@@ -147,8 +147,8 @@ svg { display: block; }
   animation: breathe 1.5s ease-in-out infinite;
 }
 @keyframes breathe {
-  0%, 100% { opacity: 0.5; box-shadow: 0 0 0 0 rgba(155, 140, 255, 0.35); }
-  50% { opacity: 1; box-shadow: 0 0 0 5px rgba(155, 140, 255, 0); }
+  0%, 100% { opacity: 0.5; box-shadow: 0 0 0 0 rgba(218, 119, 86, 0.35); }
+  50% { opacity: 1; box-shadow: 0 0 0 5px rgba(218, 119, 86, 0); }
 }
 .work-text { flex: 1; font-size: 13px; font-weight: 500; color: var(--text-2); }
 .stop-btn {
@@ -186,7 +186,7 @@ svg { display: block; }
   width: 220px;
   height: 220px;
   transform: translateX(-50%);
-  background: radial-gradient(circle, rgba(155, 140, 255, 0.16), transparent 65%);
+  background: radial-gradient(circle, rgba(218, 119, 86, 0.18), transparent 65%);
   pointer-events: none;
   z-index: -1;
 }
@@ -199,7 +199,7 @@ svg { display: block; }
   border-radius: 17px;
   background: linear-gradient(140deg, var(--accent), var(--accent-2));
   color: #fff;
-  box-shadow: 0 10px 30px rgba(110, 100, 200, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  box-shadow: 0 10px 30px rgba(218, 119, 86, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.25);
   animation: float 4s ease-in-out infinite;
 }
 @keyframes float {
@@ -262,7 +262,7 @@ svg { display: block; }
 
 /* ---- Plan / confirm / ask ---- */
 .plan-card, .confirm-card { align-self: stretch; background: var(--bg-elev); border: 1px solid var(--border-strong); border-radius: 14px; padding: 14px 16px; animation: rise 0.18s ease; }
-.plan-card { border-color: rgba(155, 140, 255, 0.4); }
+.plan-card { border-color: rgba(218, 119, 86, 0.45); }
 .plan-title, .confirm-title { font-weight: 600; margin-bottom: 9px; font-size: 14px; }
 .plan-steps { margin: 0 0 13px; padding-left: 20px; font-size: 13px; color: var(--text-2); line-height: 1.6; }
 .plan-steps li { margin: 5px 0; }
@@ -315,7 +315,7 @@ button:disabled { opacity: 0.5; cursor: default; }
   color: #fff; cursor: pointer; transition: filter 0.13s, opacity 0.13s;
 }
 .send-btn svg { width: 17px; height: 17px; }
-.send-btn:hover:not(:disabled) { filter: brightness(1.1); box-shadow: 0 3px 12px rgba(155, 140, 255, 0.45); }
+.send-btn:hover:not(:disabled) { filter: brightness(1.1); box-shadow: 0 3px 12px rgba(218, 119, 86, 0.45); }
 .send-btn:active:not(:disabled) { transform: scale(0.92); }
 .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .composer-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 9px; padding: 0 2px; }

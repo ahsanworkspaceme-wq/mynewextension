@@ -376,7 +376,7 @@ async function executeTool(ctx, name, args, config) {
       try {
         const image = await captureScreenshot(tab, state);
         return {
-          result: `Screenshot captured (${image.width}x${image.height} px). Image attached. Use these pixel coords (top-left origin) for click_at/type_at/drag.`,
+          result: `Screenshot captured. Image: ${image.width}×${image.height} px. Viewport: ${state.viewportWidth}×${state.viewportHeight} CSS px. Coordinates range from (0,0) top-left to (${image.width - 1},${image.height - 1}) bottom-right. Read coordinates CAREFULLY from the image — prefer click(index) when possible.`,
           media: image,
         };
       } catch (err) {

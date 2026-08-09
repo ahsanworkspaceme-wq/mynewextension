@@ -19,6 +19,9 @@ Thumbs.db
 .vscode/
 .idea/
 
+# claude code
+.claude/
+
 # build output
 extension/*.zip
 dist/
