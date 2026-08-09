@@ -534,14 +534,28 @@
 
     // 2) If no element or hit a non-interactive wrapper, expand search
     if (!el || (!el.closest(INTERACTIVE_SELECTOR) && el.tagName !== "A" && el.tagName !== "BUTTON")) {
-      const nearby = findNearestElement(x, y, 60);
-      if (nearby) { el = nearby; method = "nearest"; }
+      const nearby = findNearestElement(x, y, 80);
+      if (nearby) { el = nearby; method = "nearest-80"; }
     }
 
-    // 3) Final fallback: broad search
+    // 3) Broader fallback — 150px radius
     if (!el) {
-      el = findNearestElement(x, y, 120);
-      method = "fallback";
+      el = findNearestElement(x, y, 150);
+      method = "nearest-150";
+    }
+
+    // 4) Try finding any clickable element in the general area (250px)
+    if (!el) {
+      el = findNearestElement(x, y, 250);
+      method = "area-250";
+    }
+
+    // 5) Last resort — find ANY visible interactive element on the page
+    if (!el && registry.length > 0) {
+      // Find the element closest to the center of the viewport
+      const cx = vw / 2, cy = vh / 2;
+      el = findNearestElement(cx, cy, Infinity);
+      method = "viewport-center";
     }
 
     if (!el) return { ok: false, error: `No element found near (${x}, ${y}). Try get_page_state and use click(index) instead.` };

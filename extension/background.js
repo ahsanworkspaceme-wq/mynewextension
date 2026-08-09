@@ -993,16 +993,41 @@ function balanceContents(contents) {
   const out = [];
   for (const c of contents) {
     const parts = c.parts || [];
+    // Skip orphaned function responses (no matching function call before)
     if (c.role === "user" && parts.some((p) => p.functionResponse)) {
       const prev = out[out.length - 1];
       if (!prev || prev.role !== "model" || !(prev.parts || []).some((p) => p.functionCall)) continue;
     }
     out.push(c);
   }
+  // Remove trailing model turns with function calls (dangling calls with no response)
   while (out.length && out[out.length - 1].role === "model" && (out[out.length - 1].parts || []).some((p) => p.functionCall)) {
     out.pop();
   }
-  return out;
+  // Remove trailing user turns that are function responses without a model call
+  while (out.length && out[out.length - 1].role === "user" && (out[out.length - 1].parts || []).some((p) => p.functionResponse)) {
+    out.pop();
+  }
+  // Ensure conversation starts with user (not model)
+  while (out.length && out[0].role === "model") {
+    out.shift();
+  }
+  // Ensure alternating user/model pattern
+  const balanced = [];
+  let lastRole = null;
+  for (const c of out) {
+    if (c.role === lastRole) {
+      // Same role as previous — merge parts or skip
+      if (c.role === "user" && balanced.length > 0) {
+        const prev = balanced[balanced.length - 1];
+        prev.parts = [...(prev.parts || []), ...(c.parts || [])];
+      }
+      continue;
+    }
+    balanced.push(c);
+    lastRole = c.role;
+  }
+  return balanced;
 }
 
 // ---- agent loop (per side-panel connection) ---------------------------------
@@ -1143,17 +1168,28 @@ api.runtime.onConnect.addListener((port) => {
           data = await callBackend(config.backendUrl, contents, config);
         } catch (err) {
           const m = String(err.message || err);
-          const httpMatch = m.match(/^Backend \d+:\s*([\s\S]*)$/);
-          if (httpMatch) {
-            let detail = httpMatch[1];
+          // If it's a conversation format error, try cleaning and retrying once
+          if (m.includes("function call") || m.includes("function response") || m.includes("turn")) {
+            contents = balanceContents(contents);
             try {
-              detail = JSON.parse(detail).error || detail;
-            } catch (_) {}
-            send({ type: "error", text: `The AI returned an error:\n${detail}` });
+              data = await callBackend(config.backendUrl, contents, config);
+            } catch (retryErr) {
+              send({ type: "error", text: `Conversation error (even after cleanup): ${String(retryErr.message || retryErr).slice(0, 200)}` });
+              return;
+            }
           } else {
-            send({ type: "error", text: `Could not reach the backend at ${config.backendUrl}. Is it running? (cd backend && npm start)\n\n${m}` });
+            const httpMatch = m.match(/^Backend \d+:\s*([\s\S]*)$/);
+            if (httpMatch) {
+              let detail = httpMatch[1];
+              try {
+                detail = JSON.parse(detail).error || detail;
+              } catch (_) {}
+              send({ type: "error", text: `The AI returned an error:\n${detail}` });
+            } else {
+              send({ type: "error", text: `Could not reach the backend at ${config.backendUrl}. Is it running? (cd backend && npm start)\n\n${m}` });
+            }
+            return;
           }
-          return;
         }
 
         if (data?.usage?.totalTokenCount) {
