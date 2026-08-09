@@ -13,6 +13,14 @@ const BASES = {
   mistral: { kind: "openai", base: "https://api.mistral.ai/v1", defaultModel: "mistral-large-latest", envKey: "MISTRAL_API_KEY" },
   ollama: { kind: "openai", base: "http://localhost:11434/v1", defaultModel: "llama3.2", envKey: null },
   anthropic: { kind: "anthropic", base: "https://api.anthropic.com/v1", defaultModel: "claude-3-5-sonnet-latest", envKey: "ANTHROPIC_API_KEY" },
+  deepseek: { kind: "openai", base: "https://api.deepseek.com/v1", defaultModel: "deepseek-chat", envKey: "DEEPSEEK_API_KEY" },
+  cohere: { kind: "openai", base: "https://api.cohere.com/v2", defaultModel: "command-r-plus", envKey: "COHERE_API_KEY" },
+  together: { kind: "openai", base: "https://api.together.xyz/v1", defaultModel: "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo", envKey: "TOGETHER_API_KEY" },
+  fireworks: { kind: "openai", base: "https://api.fireworks.ai/inference/v1", defaultModel: "accounts/fireworks/models/llama-v3p1-70b-instruct", envKey: "FIREWORKS_API_KEY" },
+  huggingface: { kind: "openai", base: "https://api-inference.huggingface.co/v1", defaultModel: "meta-llama/Meta-Llama-3.1-8B-Instruct", envKey: "HF_API_KEY" },
+  novita: { kind: "openai", base: "https://api.novita.ai/v3/openai", defaultModel: "meta-llama/llama-3.1-70b-instruct", envKey: "NOVITA_API_KEY" },
+  chutes: { kind: "openai", base: "https://api.chutes.ai/v1", defaultModel: "deepseek-ai/DeepSeek-V3", envKey: "CHUTES_API_KEY" },
+  custom: { kind: "openai", base: "", defaultModel: "", envKey: null },
 };
 
 export const PROVIDER_NAMES = Object.keys(BASES);
@@ -29,6 +37,10 @@ export function resolveProvider(o = {}) {
   const b = BASES[name];
   if (!b) throw httpError(400, `Unknown provider "${name}". Use one of: ${PROVIDER_NAMES.join(", ")}`);
   let base = b.base;
+  // Custom provider: use the URL from the request
+  if (name === "custom" && o.customUrl) {
+    base = o.customUrl.replace(/\/+$/, "");
+  }
   if (name === "ollama" && process.env.OLLAMA_URL) base = process.env.OLLAMA_URL.replace(/\/+$/, "") + "/v1";
   const key = o.apiKey || (b.envKey ? process.env[b.envKey] : "ollama") || "";
   const model = o.model || process.env.MODEL || (name === "ollama" && process.env.OLLAMA_MODEL) || b.defaultModel;

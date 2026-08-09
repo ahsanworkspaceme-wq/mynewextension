@@ -130,6 +130,12 @@
           <input id="obKey" type="password" placeholder="Paste your API key here" autocomplete="off" />
         </div>
 
+        <div id="obCustomUrlWrap" hidden>
+          <label class="ob-label">API base URL</label>
+          <input id="obCustomUrl" type="text" placeholder="https://api.example.com/v1" autocomplete="off" />
+          <div class="ob-hint">Enter the OpenAI-compatible API endpoint (e.g. <code>https://api.deepseek.com/v1</code>)</div>
+        </div>
+
         <div class="ob-actions">
           <button id="obConnect" class="ob-test">Connect &amp; load models</button>
           <span id="obStatus" class="ob-status"></span>

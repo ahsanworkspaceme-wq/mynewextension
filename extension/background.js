@@ -47,6 +47,7 @@ async function getConfig() {
     "provider",
     "apiKeys",
     "model",
+    "customBaseUrl",
   ]);
   const provider = s.provider || "gemini";
   return {
@@ -63,6 +64,7 @@ async function getConfig() {
     provider,
     apiKey: (s.apiKeys || {})[provider] || "",
     model: s.model || "",
+    customUrl: s.customBaseUrl || "",
   };
 }
 
@@ -867,7 +869,7 @@ async function callBackend(backendUrl, contents, cfg, attempts = 3) {
       const resp = await fetch(`${backendUrl}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents, provider: cfg.provider, apiKey: cfg.apiKey, model: cfg.model }),
+        body: JSON.stringify({ contents, provider: cfg.provider, apiKey: cfg.apiKey, model: cfg.model, customUrl: cfg.customUrl }),
       });
       if (resp.ok) return resp.json();
       const body = await resp.text().catch(() => "");

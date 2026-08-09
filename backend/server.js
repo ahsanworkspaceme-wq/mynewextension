@@ -493,9 +493,9 @@ app.get("/health", (_req, res) => {
 
 // List models for a provider + key (used by the extension settings/dropdown).
 app.post("/api/models", async (req, res) => {
-  const { provider, apiKey } = req.body || {};
+  const { provider, apiKey, customUrl } = req.body || {};
   try {
-    const models = await listModels({ provider, apiKey });
+    const models = await listModels({ provider, apiKey, customUrl });
     res.json({ ok: true, models });
   } catch (err) {
     res.status(err.status || 502).json({ ok: false, error: err.message });
@@ -503,12 +503,12 @@ app.post("/api/models", async (req, res) => {
 });
 
 app.post("/api/chat", async (req, res) => {
-  const { contents, provider, apiKey, model } = req.body || {};
+  const { contents, provider, apiKey, model, customUrl } = req.body || {};
   if (!Array.isArray(contents) || contents.length === 0) {
     return res.status(400).json({ error: "Body must include a non-empty `contents` array." });
   }
   try {
-    const result = await chat({ contents, provider, apiKey, model, systemPrompt: SYSTEM_PROMPT, tools: TOOLS });
+    const result = await chat({ contents, provider, apiKey, model, customUrl, systemPrompt: SYSTEM_PROMPT, tools: TOOLS });
     return res.json({ parts: result.parts, usage: result.usage, model: result.model });
   } catch (err) {
     console.error(`${provider || "provider"} error:`, err.message);

@@ -32,6 +32,8 @@ const els = {
   obKeyHint: document.getElementById("obKeyHint"),
   obKeyWrap: document.getElementById("obKeyWrap"),
   obKey: document.getElementById("obKey"),
+  obCustomUrlWrap: document.getElementById("obCustomUrlWrap"),
+  obCustomUrl: document.getElementById("obCustomUrl"),
   obConnect: document.getElementById("obConnect"),
   obStatus: document.getElementById("obStatus"),
   obModelWrap: document.getElementById("obModelWrap"),
@@ -42,12 +44,20 @@ const els = {
 
 const PROVIDER_INFO = {
   gemini: { label: "Google Gemini", url: "https://aistudio.google.com/apikey", needsKey: true },
-  openrouter: { label: "OpenRouter — many models, one key", url: "https://openrouter.ai/keys", needsKey: true },
-  groq: { label: "Groq — very fast, free tier", url: "https://console.groq.com/keys", needsKey: true },
   openai: { label: "OpenAI (GPT)", url: "https://platform.openai.com/api-keys", needsKey: true },
   anthropic: { label: "Anthropic (Claude)", url: "https://console.anthropic.com/settings/keys", needsKey: true },
+  openrouter: { label: "OpenRouter — many models, one key", url: "https://openrouter.ai/keys", needsKey: true },
+  groq: { label: "Groq — very fast, free tier", url: "https://console.groq.com/keys", needsKey: true },
+  deepseek: { label: "DeepSeek — powerful & affordable", url: "https://platform.deepseek.com/api_keys", needsKey: true },
   mistral: { label: "Mistral", url: "https://console.mistral.ai/api-keys", needsKey: true },
+  cohere: { label: "Cohere — Command R+", url: "https://dashboard.cohere.com/api-keys", needsKey: true },
+  together: { label: "Together AI — open models", url: "https://api.together.xyz/settings/api-keys", needsKey: true },
+  fireworks: { label: "Fireworks AI — fast inference", url: "https://fireworks.ai/account/api-keys", needsKey: true },
+  huggingface: { label: "Hugging Face — free inference", url: "https://huggingface.co/settings/tokens", needsKey: true },
+  novita: { label: "Novita AI — affordable GPU", url: "https://novita.ai/settings/api-keys", needsKey: true },
+  chutes: { label: "Chutes AI — cheap & fast", url: "https://chutes.ai/app/api-keys", needsKey: true },
   ollama: { label: "Ollama — local & free (no key)", url: "https://ollama.com/download", needsKey: false },
+  custom: { label: "Custom — any OpenAI-compatible API", url: "", needsKey: true, custom: true },
 };
 
 let port = null;
@@ -642,11 +652,11 @@ async function getStored() {
   return { provider, apiKeys: s.apiKeys || {}, apiKey: (s.apiKeys || {})[provider] || "", model: s.model || "", backendUrl: s.backendUrl || "http://localhost:8787" };
 }
 // Ask the backend which models this provider + key can use.
-async function fetchModels(backendUrl, provider, apiKey) {
+async function fetchModels(backendUrl, provider, apiKey, customUrl) {
   const r = await fetch(`${backendUrl}/api/models`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ provider, apiKey }),
+    body: JSON.stringify({ provider, apiKey, customUrl }),
   });
   const j = await r.json();
   if (!r.ok || !j.ok) throw new Error(j.error || `HTTP ${r.status}`);
@@ -916,9 +926,14 @@ function populateProviders() {
 function onProviderChange() {
   const info = PROVIDER_INFO[els.obProvider.value];
   els.obKeyWrap.style.display = info.needsKey ? "" : "none";
-  els.obKeyHint.innerHTML = info.needsKey
-    ? `Get a key: <a href="${info.url}" target="_blank" rel="noopener">${info.url.replace("https://", "")}</a>`
-    : `Install Ollama and run <code>ollama serve</code> — no key needed. <a href="${info.url}" target="_blank" rel="noopener">Download</a>`;
+  els.obCustomUrlWrap.hidden = !info.custom;
+  if (info.custom) {
+    els.obKeyHint.innerHTML = `Enter any OpenAI-compatible API endpoint and key. Works with DeepSeek, Together, Fireworks, vLLM, LM Studio, text-generation-webui, etc.`;
+  } else if (info.needsKey) {
+    els.obKeyHint.innerHTML = `Get a key: <a href="${info.url}" target="_blank" rel="noopener">${info.url.replace("https://", "")}</a>`;
+  } else {
+    els.obKeyHint.innerHTML = `Install Ollama and run <code>ollama serve</code> — no key needed. <a href="${info.url}" target="_blank" rel="noopener">Download</a>`;
+  }
   els.obModelWrap.hidden = true;
   els.obDone.disabled = true;
   els.obStatus.textContent = "";
@@ -927,9 +942,15 @@ async function obConnect() {
   const provider = els.obProvider.value;
   const info = PROVIDER_INFO[provider];
   const apiKey = els.obKey.value.trim();
+  const customUrl = els.obCustomUrl.value.trim();
   const url = els.obBackend.value.trim().replace(/\/+$/, "") || "http://localhost:8787";
   if (info.needsKey && !apiKey) {
     els.obStatus.textContent = "Paste your API key first.";
+    els.obStatus.className = "ob-status err";
+    return;
+  }
+  if (info.custom && !customUrl) {
+    els.obStatus.textContent = "Enter the API base URL first.";
     els.obStatus.className = "ob-status err";
     return;
   }
@@ -937,7 +958,7 @@ async function obConnect() {
   els.obStatus.className = "ob-status";
   els.obConnect.disabled = true;
   try {
-    obModels = await fetchModels(url, provider, apiKey);
+    obModels = await fetchModels(url, provider, apiKey, customUrl);
     if (!obModels.length) throw new Error("No models returned");
     els.obModel.innerHTML = obModels.map((m) => `<option value="${m}">${shortModel(m)}</option>`).join("");
     els.obModelWrap.hidden = false;
@@ -954,12 +975,15 @@ async function obConnect() {
 async function saveSetup() {
   const provider = els.obProvider.value;
   const apiKey = els.obKey.value.trim();
+  const customUrl = els.obCustomUrl.value.trim();
   const url = els.obBackend.value.trim().replace(/\/+$/, "") || "http://localhost:8787";
   const model = els.obModel.value || (obModels[0] || "");
   const s = await api.storage.local.get(["apiKeys"]);
   const apiKeys = s.apiKeys || {};
   if (apiKey) apiKeys[provider] = apiKey;
-  await api.storage.local.set({ provider, apiKeys, model, backendUrl: url, onboarded: true });
+  const toSave = { provider, apiKeys, model, backendUrl: url, onboarded: true };
+  if (customUrl) toSave.customBaseUrl = customUrl;
+  await api.storage.local.set(toSave);
   els.onboarding.hidden = true;
   loadModels();
 }
