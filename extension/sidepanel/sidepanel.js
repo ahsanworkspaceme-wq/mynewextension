@@ -16,8 +16,15 @@ const els = {
   saveSkill: document.getElementById("saveSkill"),
   schedule: document.getElementById("schedule"),
   exportChat: document.getElementById("exportChat"),
+  fillProfile: document.getElementById("fillProfile"),
+  recordWorkflow: document.getElementById("recordWorkflow"),
+  workflowsList: document.getElementById("workflowsList"),
+  recordBar: document.getElementById("recordBar"),
+  stopRecord: document.getElementById("stopRecord"),
+  workflowsPanel: document.getElementById("workflowsPanel"),
   pick: document.getElementById("pick"),
   skillsBar: document.getElementById("skillsBar"),
+  suggestionsBar: document.getElementById("suggestionsBar"),
   confirmMode: document.getElementById("confirmMode"),
   aiSetup: document.getElementById("aiSetup"),
   onboarding: document.getElementById("onboarding"),
@@ -282,6 +289,15 @@ const TOOL_LABELS = {
   press_keys: "Pressing keys",
   remember: "Saving to memory",
   recall: "Recalling memory",
+  smart_fill: "Auto-filling form",
+  detect_form: "Detecting form fields",
+  record_start: "Recording actions",
+  record_stop: "Stopping recording",
+  record_get: "Getting recording",
+  workflow_save: "Saving workflow",
+  workflow_list: "Listing workflows",
+  workflow_replay: "Replaying workflow",
+  workflow_delete: "Deleting workflow",
   wait: "Waiting",
 };
 // Minimal line-icons (inner SVG paths) for the activity feed.
@@ -311,6 +327,15 @@ const ACT_PATHS = {
   press_keys: '<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M8 14h8"/>',
   remember: '<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>',
   recall: '<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>',
+  smart_fill: '<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  detect_form: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M3 9h18"/>',
+  record_start: '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/>',
+  record_stop: '<circle cx="12" cy="12" r="7"/><rect x="9" y="9" width="6" height="6" rx="1"/>',
+  record_get: '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/>',
+  workflow_save: '<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>',
+  workflow_list: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
+  workflow_replay: '<polygon points="5 3 19 12 5 21 5 3"/>',
+  workflow_delete: '<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
   wait: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
 };
 function actIcon(name, declined) {
@@ -530,6 +555,16 @@ function onPortMessage(msg) {
     case "run_prompt": // scheduled task fired
       if (msg.text) sendMessage(msg.text);
       break;
+    case "recording_update":
+      if (msg.count) els.recordBar.querySelector(".rec-text").textContent = `Recording… ${msg.count} step(s)`;
+      break;
+    case "site_memories":
+      // Could show a subtle indicator; for now just log
+      if (msg.count > 0) console.log(`[Glide] ${msg.count} memory(ies) loaded for ${msg.site}`);
+      break;
+    case "suggestions":
+      if (!busy) renderSuggestions(msg.items || []);
+      break;
     case "done":
       setBusy(false);
       break;
@@ -579,6 +614,9 @@ els.newChat.addEventListener("click", async () => {
   location.reload();
 });
 els.openOptions.addEventListener("click", () => {
+  if (api.runtime.openOptionsPage) api.runtime.openOptionsPage();
+});
+els.fillProfile.addEventListener("click", () => {
   if (api.runtime.openOptionsPage) api.runtime.openOptionsPage();
 });
 
@@ -644,6 +682,26 @@ async function getSkills() {
   const s = await api.storage.local.get(["skills"]);
   return Array.isArray(s.skills) ? s.skills : [];
 }
+
+let lastSuggestionItems = [];
+function renderSuggestions(items) {
+  if (!items.length) { els.suggestionsBar.hidden = true; return; }
+  if (JSON.stringify(items) === JSON.stringify(lastSuggestionItems) && !els.suggestionsBar.hidden) return;
+  lastSuggestionItems = items;
+  els.suggestionsBar.hidden = false;
+  els.suggestionsBar.innerHTML = "";
+  items.forEach((s) => {
+    const chip = document.createElement("button");
+    chip.className = "suggestion-chip";
+    chip.textContent = "✦ " + s.label;
+    chip.addEventListener("click", () => {
+      els.suggestionsBar.hidden = true;
+      sendMessage(s.prompt);
+    });
+    els.suggestionsBar.appendChild(chip);
+  });
+}
+
 async function renderSkills() {
   const skills = await getSkills();
   if (!skills.length) {
@@ -759,6 +817,68 @@ els.schedule.addEventListener("click", async () => {
 els.pick.addEventListener("click", () => {
   setStatus("Pick an element on the page…");
   ensurePort().postMessage({ type: "pick_element" });
+});
+
+// ---- workflow recorder -------------------------------------------------------
+
+let isRecording = false;
+
+els.recordWorkflow.addEventListener("click", async () => {
+  if (isRecording) return;
+  isRecording = true;
+  els.recordBar.hidden = false;
+  els.recordBar.querySelector(".rec-text").textContent = "Recording…";
+  els.recordWorkflow.style.color = "var(--danger)";
+  ensurePort().postMessage({ type: "user_message", text: "record_start" });
+});
+
+els.stopRecord.addEventListener("click", async () => {
+  if (!isRecording) return;
+  isRecording = false;
+  els.recordBar.hidden = true;
+  els.recordWorkflow.style.color = "";
+  ensurePort().postMessage({ type: "user_message", text: "record_stop" });
+  // Wait a moment for the result, then prompt for name
+  setTimeout(async () => {
+    const name = window.prompt("Name this workflow:");
+    if (name) {
+      ensurePort().postMessage({ type: "user_message", text: `workflow_save name="${name}"` });
+    }
+  }, 500);
+});
+
+els.workflowsList.addEventListener("click", async () => {
+  const panel = els.workflowsPanel;
+  if (!panel.hidden) { panel.hidden = true; return; }
+  panel.hidden = false;
+  const s = await api.storage.local.get(["workflows"]);
+  const wfs = s.workflows || [];
+  if (!wfs.length) {
+    panel.innerHTML = '<div style="font-size:13px;color:var(--text-dim);padding:8px 0;">No saved workflows yet.</div>';
+    return;
+  }
+  panel.innerHTML = "";
+  wfs.forEach((wf) => {
+    const item = document.createElement("div");
+    item.className = "wf-item";
+    item.innerHTML =
+      `<div class="wf-info"><div class="wf-name">${escapeHtml(wf.name)}</div>` +
+      `<div class="wf-meta">${wf.steps.length} steps · ${wf.site || "any site"}</div></div>` +
+      `<div class="wf-actions">` +
+      `<button class="wf-btn" title="Replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></button>` +
+      `<button class="wf-btn" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>` +
+      `</div>`;
+    item.querySelector("[title=Replay]").addEventListener("click", () => {
+      sendMessage(`Replay the workflow named "${wf.name}"`);
+      panel.hidden = true;
+    });
+    item.querySelector("[title=Delete]").addEventListener("click", async () => {
+      if (!confirm(`Delete workflow "${wf.name}"?`)) return;
+      ensurePort().postMessage({ type: "user_message", text: `workflow_delete id="${wf.id}"` });
+      item.remove();
+    });
+    panel.appendChild(item);
+  });
 });
 
 // ---- export chat ------------------------------------------------------------

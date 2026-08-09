@@ -108,6 +108,26 @@
     }
   }
 
+  function detectPageType() {
+    const url = location.href;
+    const textLen = (document.body?.innerText || "").length;
+    const hasForms = document.querySelectorAll("input:not([type=hidden]), textarea, select").length > 0;
+    const hasPassword = !!document.querySelector("input[type=password]");
+    const title = document.title || "";
+    const bodyText = (document.body?.innerText || "").slice(0, 2000);
+    const hasLogin = hasPassword || /log\s?in|sign\s?in/i.test(title + " " + bodyText);
+    const hasTables = document.querySelectorAll("table").length > 0;
+    const hasLongText = textLen > 6000;
+    let pageType = "generic";
+    if (document.querySelector("video") || /youtube\.com|vimeo\.com|dailymotion\.com/i.test(url)) pageType = "video";
+    else if (/[?&](q|query|search|s)=/i.test(url)) pageType = "search";
+    else if (document.querySelector("article") || (document.querySelectorAll("p").length > 25 && hasLongText)) pageType = "article";
+    else if (hasForms && document.querySelectorAll("input").length >= 4) pageType = "form";
+    else if (hasTables && /dashboard|analytics|metrics|report/i.test(title + " " + url)) pageType = "dashboard";
+    else if (/twitter\.com|x\.com|facebook\.com|instagram\.com|linkedin\.com|reddit\.com|tiktok\.com/i.test(url)) pageType = "social";
+    return { hasForms, hasLogin, hasTables, hasLongText, pageType, textLen };
+  }
+
   function collectState() {
     registry = [];
     const lines = [];
@@ -118,6 +138,7 @@
       text = (document.body?.innerText || "").replace(/\n{3,}/g, "\n\n").trim().slice(0, MAX_TEXT);
     } catch (_) {}
 
+    const analysis = detectPageType();
     return {
       url: location.href,
       title: document.title,
@@ -129,6 +150,7 @@
       elementCount: registry.length,
       elements: lines.join("\n"),
       text,
+      pageType: analysis.pageType,
     };
   }
 
@@ -191,6 +213,24 @@
       win = win.parent;
     }
     return { left, top, width: rect.width, height: rect.height };
+  }
+
+  // ---- screenshot annotations ------------------------------------------------
+  // Returns viewport coordinates of all visible interactive elements for
+  // overlaying numbered labels on captured screenshots.
+  function getElementAnnotations() {
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const items = [];
+    for (let i = 0; i < registry.length; i++) {
+      const el = registry[i];
+      if (!el || !el.getBoundingClientRect) continue;
+      const r = rectInTopViewport(el);
+      const cx = Math.round(r.left + r.width / 2);
+      const cy = Math.round(r.top + r.height / 2);
+      if (cx < 0 || cy < 0 || cx > vw || cy > vh) continue;
+      items.push({ index: i, x: cx, y: cy, rect: { left: Math.round(r.left), top: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) } });
+    }
+    return items;
   }
 
   function flash(box) {
@@ -366,11 +406,13 @@
   }
 
   function setValue(el, text) {
+    try { window.__glideAgentAction = true; } catch (_) {}
     const proto = el.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
     const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
     if (setter) setter.call(el, text);
     else el.value = text;
     fireInput(el);
+    setTimeout(() => { try { window.__glideAgentAction = false; } catch (_) {} }, 50);
   }
 
   function pressEnter(el) {
@@ -388,6 +430,8 @@
   }
 
   function synthClick(el, x, y) {
+    try { window.__glideAgentAction = true; }
+    catch (_) {}
     const opts = { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y, button: 0 };
     try {
       el.dispatchEvent(new PointerEvent("pointerdown", opts));
@@ -400,6 +444,7 @@
     el.dispatchEvent(new MouseEvent("click", opts));
     if (typeof el.click === "function") el.click();
     cursorPress();
+    setTimeout(() => { try { window.__glideAgentAction = false; } catch (_) {} }, 50);
   }
 
   function typeInto(el, text, submit) {
@@ -654,6 +699,190 @@
     return { ok: true, message: `Pressed ${combo}` };
   }
 
+  // ---- smart form filling ----------------------------------------------------
+
+  const FIELD_ALIASES = {
+    email: ["email", "e-mail", "emailaddress", "mail", "user-email"],
+    phone: ["phone", "tel", "telephone", "mobile", "cell", "phone-number", "contact"],
+    firstName: ["first-name", "firstname", "fname", "given-name", "your-name"],
+    lastName: ["last-name", "lastname", "lname", "surname", "family-name"],
+    name: ["name", "fullname", "full-name", "customer-name", "your-name"],
+    address: ["address", "street", "street-address", "addr", "address1", "address-line1"],
+    city: ["city", "town", "locality"],
+    state: ["state", "region", "province", "state-province"],
+    zip: ["zip", "zipcode", "zip-code", "postal", "postal-code", "postcode"],
+    country: ["country", "country-code", "nation"],
+  };
+
+  function findFieldLabel(el) {
+    return (el.getAttribute("aria-label") || el.getAttribute("placeholder") ||
+      el.closest("label")?.textContent || "").toLowerCase();
+  }
+
+  function detectFormFields() {
+    const fields = [];
+    for (let i = 0; i < registry.length; i++) {
+      const el = registry[i], tag = el.tagName.toLowerCase();
+      if (tag !== "input" && tag !== "textarea" && tag !== "select") continue;
+      const type = (el.getAttribute("type") || "text").toLowerCase();
+      if (["hidden", "submit", "button", "file", "image", "reset", "password"].includes(type)) continue;
+      if (String(el.getAttribute("autocomplete") || "").toLowerCase().includes("password")) continue;
+      fields.push({
+        index: i, tag, type,
+        name: (el.getAttribute("name") || "").toLowerCase(),
+        label: findFieldLabel(el),
+        placeholder: (el.getAttribute("placeholder") || "").toLowerCase(),
+        autocomplete: (el.getAttribute("autocomplete") || "").toLowerCase(),
+        required: el.hasAttribute("required"),
+      });
+    }
+    return fields;
+  }
+
+  function matchFieldScore(f, key) {
+    const aliases = [key, ...(FIELD_ALIASES[key] || [])];
+    let best = 0;
+    for (const a of aliases) {
+      if (f.autocomplete === a) return 100;
+      if (f.name === a || f.name.includes(a)) best = Math.max(best, 80);
+      if (f.label.includes(a) || f.placeholder.includes(a)) best = Math.max(best, 60);
+    }
+    return best;
+  }
+
+  function fillFormWithProfile(profile) {
+    const fields = detectFormFields();
+    const filled = [];
+    const usedFields = new Set();
+    for (const key of Object.keys(FIELD_ALIASES)) {
+      const value = profile[key];
+      if (!value) continue;
+      let best = null, bestScore = 0;
+      for (const f of fields) {
+        if (usedFields.has(f.index)) continue;
+        const s = matchFieldScore(f, key);
+        if (s > bestScore) { bestScore = s; best = f; }
+      }
+      if (best && bestScore >= 60) {
+        const el = findByIndex(best.index);
+        if (!el) continue;
+        if (best.tag === "select") {
+          el.value = value;
+          if (el.value !== value) {
+            const opt = [...el.options].find(o => (o.textContent || "").toLowerCase().includes(value.toLowerCase()));
+            if (opt) el.value = opt.value;
+          }
+          fireInput(el);
+        } else {
+          setValue(el, value);
+        }
+        usedFields.add(best.index);
+        filled.push({ index: best.index, key, value });
+      }
+    }
+    return filled;
+  }
+
+  // ---- workflow recorder -----------------------------------------------------
+
+  let recording = false;
+  const typeTimers = new Map();
+  let lastScrollY = 0, lastScrollAt = 0;
+
+  function robustSelector(el) {
+    if (el.id) return "#" + CSS.escape(el.id);
+    for (const attr of ["data-testid", "data-test", "name"]) {
+      const v = el.getAttribute(attr);
+      if (v) return `[${attr}="${CSS.escape(v)}"]`;
+    }
+    const parts = [];
+    let node = el;
+    while (node && node !== document.documentElement && parts.length < 4) {
+      let sel = node.tagName.toLowerCase();
+      if (node.id) { parts.unshift("#" + CSS.escape(node.id)); break; }
+      if (typeof node.className === "string" && node.className.trim()) {
+        const cls = node.className.trim().split(/\s+/).slice(0, 2).map(c => "." + CSS.escape(c)).join("");
+        if (cls) sel += cls;
+      }
+      const parent = node.parentElement;
+      if (parent) {
+        const sib = [...parent.children];
+        if (sib.length > 1) sel += `:nth-child(${sib.indexOf(node) + 1})`;
+      }
+      parts.unshift(sel);
+      node = parent;
+    }
+    return parts.join(" > ");
+  }
+
+  function recSend(step) {
+    try { api.runtime.sendMessage({ type: "recording_event", step }); } catch (_) {}
+  }
+
+  document.addEventListener("click", (e) => {
+    if (!recording || window.__glideAgentAction) return;
+    const el = e.target?.closest?.(INTERACTIVE_SELECTOR);
+    if (!el) return;
+    recSend({ type: "click", selector: robustSelector(el), text: clean(el.innerText || el.value || "") });
+  }, true);
+
+  document.addEventListener("change", (e) => {
+    if (!recording || window.__glideAgentAction) return;
+    const el = e.target;
+    if (el.matches("select")) recSend({ type: "select", selector: robustSelector(el), value: el.value });
+    else if (el.matches("input[type=checkbox], input[type=radio]"))
+      recSend({ type: "click", selector: robustSelector(el), text: el.checked ? "checked" : "unchecked" });
+  }, true);
+
+  document.addEventListener("input", (e) => {
+    if (!recording || window.__glideAgentAction) return;
+    const el = e.target;
+    if (!el.matches('input:not([type=checkbox],[type=radio],[type=password]), textarea, [contenteditable=true]')) return;
+    clearTimeout(typeTimers.get(el));
+    typeTimers.set(el, setTimeout(() => {
+      const text = el.tagName === "INPUT" || el.tagName === "TEXTAREA" ? el.value : el.textContent;
+      recSend({ type: "type", selector: robustSelector(el), text: String(text || "") });
+    }, 700));
+  }, true);
+
+  window.addEventListener("scroll", () => {
+    if (!recording || window.__glideAgentAction) return;
+    const now = Date.now(), y = Math.round(window.scrollY);
+    if (now - lastScrollAt < 600 || Math.abs(y - lastScrollY) < 40) return;
+    lastScrollY = y; lastScrollAt = now;
+    recSend({ type: "scroll", scrollY: y });
+  }, true);
+
+  window.addEventListener("pagehide", () => {
+    for (const t of typeTimers.values()) clearTimeout(t);
+    typeTimers.clear();
+  });
+
+  async function doWorkflowStep(step) {
+    try {
+      const el = step.selector ? document.querySelector(step.selector) : null;
+      if (!el) return { ok: false, error: `Could not find element: ${step.selector}` };
+      safeScrollIntoView(el, { block: "center" });
+      highlightElement(el);
+      await pause(300);
+      if (step.type === "click") {
+        const r = el.getBoundingClientRect();
+        synthClick(el, r.left + r.width / 2, r.top + r.height / 2);
+        return { ok: true, message: `Clicked ${step.selector}` };
+      } else if (step.type === "type") {
+        typeInto(el, step.text || "", false);
+        return { ok: true, message: `Typed into ${step.selector}` };
+      } else if (step.type === "select") {
+        el.value = step.value || "";
+        fireInput(el);
+        return { ok: true, message: `Selected in ${step.selector}` };
+      }
+      return { ok: false, error: `Unknown step type: ${step.type}` };
+    } catch (err) {
+      return { ok: false, error: String(err?.message || err) };
+    }
+  }
+
   // ---- message router -------------------------------------------------------
 
   api.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
@@ -687,6 +916,32 @@
             break;
           case "get_extract":
             sendResponse({ ok: true, data: extractData() });
+            break;
+          case "get_annotations":
+            sendResponse({ ok: true, items: getElementAnnotations() });
+            break;
+          case "detect_form":
+            sendResponse({ ok: true, fields: detectFormFields() });
+            break;
+          case "fill_form":
+            sendResponse({ ok: true, filled: fillFormWithProfile(msg.profile || {}) });
+            break;
+          case "record_start":
+            recording = true;
+            lastScrollY = window.scrollY;
+            sendResponse({ ok: true });
+            break;
+          case "record_stop":
+            recording = false;
+            for (const t of typeTimers.values()) clearTimeout(t);
+            typeTimers.clear();
+            sendResponse({ ok: true });
+            break;
+          case "workflow_step":
+            sendResponse(await doWorkflowStep(msg.step || {}));
+            break;
+          case "get_analysis":
+            sendResponse({ ok: true, analysis: detectPageType() });
             break;
           case "pick_start":
             startPick(sendResponse);

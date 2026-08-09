@@ -130,6 +130,34 @@ svg { display: block; }
 }
 .skill-chip:hover { border-color: var(--accent); color: var(--text); }
 
+/* ---- Suggestions bar ---- */
+.suggestions-bar {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+  scrollbar-width: none;
+}
+.suggestions-bar::-webkit-scrollbar { display: none; }
+.suggestion-chip {
+  flex-shrink: 0;
+  background: var(--accent-soft);
+  border: 1px solid rgba(218, 119, 86, 0.3);
+  color: var(--accent);
+  padding: 5px 11px;
+  border-radius: 18px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.13s, color 0.13s, background 0.13s;
+}
+.suggestion-chip:hover {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
 /* ---- Working bar ---- */
 .working-bar {
   display: flex;
@@ -163,6 +191,61 @@ svg { display: block; }
   transition: all 0.13s;
 }
 .stop-btn:hover { border-color: var(--danger); color: var(--danger); }
+
+/* ---- Recording bar ---- */
+.record-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(226, 122, 99, 0.3);
+  background: rgba(226, 122, 99, 0.08);
+}
+.rec-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--danger);
+  animation: rec-pulse 1.2s ease-in-out infinite;
+}
+@keyframes rec-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(226, 122, 99, 0.4); }
+  50% { opacity: 0.6; box-shadow: 0 0 0 6px rgba(226, 122, 99, 0); }
+}
+.rec-text { flex: 1; font-size: 13px; font-weight: 500; color: var(--danger); }
+
+/* ---- Workflows panel ---- */
+.workflows-panel {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  max-height: 200px;
+  overflow-y: auto;
+}
+.wf-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  margin-bottom: 6px;
+  cursor: pointer;
+  transition: border-color 0.13s;
+}
+.wf-item:hover { border-color: var(--accent); }
+.wf-info { flex: 1; min-width: 0; }
+.wf-name { font-size: 13px; font-weight: 500; color: var(--text); }
+.wf-meta { font-size: 11px; color: var(--text-dim); }
+.wf-actions { display: flex; gap: 4px; }
+.wf-btn {
+  display: grid; place-items: center;
+  width: 26px; height: 26px; border: none; background: transparent;
+  color: var(--text-dim); border-radius: 6px; cursor: pointer;
+  transition: background 0.13s, color 0.13s;
+}
+.wf-btn:hover { background: var(--bg-hover); color: var(--text); }
+.wf-btn svg { width: 14px; height: 14px; }
 
 /* ---- Messages ---- */
 .messages {

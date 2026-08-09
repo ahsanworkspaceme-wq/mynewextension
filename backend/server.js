@@ -44,15 +44,15 @@ You can act in TWO ways — choose whichever fits:
 
 2. Vision / coordinate mode (for canvas apps, maps, custom widgets, or when the
    right element is NOT in the indexed list):
-   Call screenshot() to SEE the page. An image is attached to the result. Then use
-   click_at(x, y) / type_at(x, y, ...) with pixel coordinates read from that image.
-   The result includes the image dimensions — use those as your coordinate bounds.
-   Coordinates are CSS pixels with top-left origin (0,0). Read coordinates carefully:
-   - x increases left → right
-   - y increases top → bottom
-   - The image dimensions are given in the screenshot result
-   Re-screenshot after the page changes. NEVER guess coordinates — read them precisely
-   from the image. If the target is in the element list, use index mode instead.
+   Call screenshot() to SEE the page. The screenshot has NUMBERED ORANGE CIRCLES on
+   each visible interactive element — these numbers match the [index] from the page
+   state. When you see element #N labeled on the screenshot, use click(index=N) or
+   type_text(index=N) for maximum precision. If the target has NO numbered circle
+   (e.g. a canvas area, map pin), use click_at(x, y) / type_at(x, y, ...) with
+   pixel coordinates read from the image. Coordinates are CSS pixels with top-left
+   origin (0,0). Re-screenshot after the page changes. NEVER guess coordinates —
+   read them precisely from the image. Numbered elements are ALWAYS more accurate
+   than raw coordinates.
 
 Prefer index mode when the target is clearly in the element list. Switch to vision
 mode when it isn't, or when the UI is visual/canvas-based.
@@ -82,7 +82,16 @@ For "research X across sites and summarize" style tasks: open_tab for each site 
 If you hit a CAPTCHA, a login/2FA step, or need a human decision, call ask_user to hand control to the user and wait for their reply — do not try to solve CAPTCHAs yourself.
 
 ## Memory
-Use remember() to save durable, useful facts or preferences the user shares (never passwords/secrets). Saved memory is provided to you at the start of new conversations; use recall() to review it.
+Use remember() to save durable, useful facts or preferences the user shares (never passwords/secrets). Memory is site-aware: when you save a memory, it's automatically tagged with the current site. When the user returns to that site, relevant memories are loaded automatically. Global (untagged) memories are loaded at the start of new conversations. Use recall() to review all saved memories.
+
+## Forms & auto-fill
+When the user wants to fill a form, use smart_fill() to auto-fill with their saved profile. If no profile exists, guide them to Settings → Fill Profile to create one. You can also use detect_form() to see what fields are available before filling. NEVER attempt to fill password fields — the tool automatically skips them.
+
+## Workflow macros
+For repetitive multi-step tasks, suggest recording a workflow: call record_start, let the user perform the actions, then record_stop and workflow_save. Saved workflows can be replayed with workflow_replay. Use workflow_list to show available workflows and workflow_delete to remove them.
+
+## Proactive suggestions
+The side panel may show contextual suggestion chips based on the page type (forms, articles, videos, etc.). These are hints for what the user might want — you receive them as clickable prompts. If the user clicks a suggestion, treat it as their actual request. If no suggestion applies to what they're asking, ignore them and focus on their request.
 
 ## Do (almost) anything — the power tools
 When the standard click/type tools aren't enough, you have escape hatches that let you handle nearly any task a browser can do:
@@ -125,7 +134,7 @@ const TOOLS = [
       {
         name: "screenshot",
         description:
-          "Capture the visible page as an image so you can SEE it. The result includes the image dimensions (WxH). Read pixel coordinates off the image for click_at/type_at. Coordinates range from (0,0) at top-left to (W-1,H-1) at bottom-right. Use for canvas/visual UIs or when the target isn't in the element list.",
+          "Capture the visible page as an image so you can SEE it. Interactive elements are labeled with numbered orange circles matching the [index] in the page state. Prefer click(index=N) for numbered elements. Use click_at(x,y) only for unlabeled targets (canvas, maps). Coordinates are CSS pixels, top-left origin.",
         parameters: { type: "OBJECT", properties: {} },
       },
       {
@@ -346,6 +355,23 @@ const TOOLS = [
         parameters: { type: "OBJECT", properties: {} },
       },
       {
+        name: "smart_fill",
+        description:
+          "Auto-fill form fields on the current page using the user's saved profile (name, email, phone, address, city, state, zip, country). NEVER fills password fields. Call when the user asks to auto-fill a form or fill in their details. If no profile exists, tell the user to add one in Settings → Fill Profile.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            profile: { type: "STRING", description: "Optional saved profile name. Omit to use the default/active profile." },
+          },
+        },
+      },
+      {
+        name: "detect_form",
+        description:
+          "Detect all form fields on the current page and return their details (index, type, name, label). Useful before smart_fill to understand what fields are available.",
+        parameters: { type: "OBJECT", properties: {} },
+      },
+      {
         name: "http_request",
         description:
           "Make an HTTP request to an API (a lightweight connector). Use for REST APIs, webhooks, or creating/importing data programmatically — e.g. building an n8n workflow via the n8n REST API instead of dragging nodes. Non-GET requests ask for confirmation.",
@@ -404,6 +430,54 @@ const TOOLS = [
             seconds: { type: "INTEGER", description: "Seconds to wait (max 8)." },
           },
           required: ["seconds"],
+        },
+      },
+      {
+        name: "record_start",
+        description: "Start recording the user's browser actions (clicks, typing, selections, scrolls). The recording captures actions as a reusable workflow macro.",
+        parameters: { type: "OBJECT", properties: {} },
+      },
+      {
+        name: "record_stop",
+        description: "Stop the current recording. The recorded steps are held in memory — call workflow_save to persist them.",
+        parameters: { type: "OBJECT", properties: {} },
+      },
+      {
+        name: "workflow_save",
+        description: "Save the current recording as a named workflow. Call record_stop first.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            name: { type: "STRING", description: "A descriptive name for this workflow." },
+          },
+          required: ["name"],
+        },
+      },
+      {
+        name: "workflow_list",
+        description: "List all saved workflows with their names, step counts, and site targets.",
+        parameters: { type: "OBJECT", properties: {} },
+      },
+      {
+        name: "workflow_replay",
+        description: "Replay a saved workflow by its name or id. Executes each recorded step in sequence on the current page.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            id: { type: "STRING", description: "The workflow id (from workflow_list)." },
+            name: { type: "STRING", description: "The workflow name (alternative to id)." },
+          },
+        },
+      },
+      {
+        name: "workflow_delete",
+        description: "Delete a saved workflow by its id.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            id: { type: "STRING", description: "The workflow id to delete." },
+          },
+          required: ["id"],
         },
       },
     ],

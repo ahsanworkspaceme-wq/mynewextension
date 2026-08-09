@@ -79,11 +79,28 @@ async function getMemories() {
   const s = await api.storage.local.get(["memories"]);
   return Array.isArray(s.memories) ? s.memories : [];
 }
-async function addMemory(note) {
+async function addMemory(note, site, url) {
   const mem = await getMemories();
-  mem.push({ note: String(note).slice(0, 500), at: Date.now() });
+  const entry = { note: String(note).slice(0, 500), at: Date.now() };
+  if (site) entry.site = site;
+  if (url) entry.url = url;
+  mem.push(entry);
   await api.storage.local.set({ memories: mem.slice(-100) });
   return mem.length;
+}
+async function getSiteMemories(url) {
+  const mem = await getMemories();
+  const host = hostOf(url || "");
+  return mem.filter((m) => {
+    if (!m.site) return false;
+    if (m.site === host) return true;
+    if (m.url && url && url.startsWith(m.url)) return true;
+    return false;
+  });
+}
+async function getGlobalMemories() {
+  const mem = await getMemories();
+  return mem.filter((m) => !m.site && !m.url);
 }
 
 // ---- connected side panels (for scheduled auto-run) -------------------------
@@ -115,6 +132,48 @@ if (api.alarms?.onAlarm) {
       });
     }
   });
+}
+
+// ---- proactive suggestions ---------------------------------------------------
+
+function buildSuggestions(analysis) {
+  const out = [];
+  const add = (label, prompt) => { if (out.length < 4 && !out.some(s => s.prompt === prompt)) out.push({ label, prompt }); };
+  if (analysis.hasForms) add("Auto-fill this form", "Auto-fill this form using my saved profile.");
+  if (analysis.hasLogin) add("Remember this site", "Remember what I fill in on this site for next time.");
+  if (analysis.hasTables) add("Extract the data", "Extract the key data on this page as a clean structured list.");
+  if (analysis.pageType === "article" || analysis.hasLongText) add("Summarize this page", "Summarize this page in a few clear bullet points.");
+  if (analysis.pageType === "video") add("Summarize this video", "Summarize this video page: title, description, key points.");
+  if (analysis.pageType === "search") add("Open the top result", "Open the top search result.");
+  if (analysis.pageType === "dashboard") add("Analyze the dashboard", "Analyze the key metrics on this dashboard.");
+  return out;
+}
+
+async function pushContext() {
+  const tab = await getActiveTab();
+  if (!tab || !/^https?:/i.test(tab.url || "")) return;
+  let res;
+  try { res = await sendToTab(tab.id, { type: "get_analysis" }); } catch (_) { return; }
+  if (!res?.ok) return;
+  const suggestions = buildSuggestions(res.analysis);
+  for (const p of connectedPorts) {
+    try { p.postMessage({ type: "suggestions", items: suggestions }); } catch (_) {}
+  }
+}
+
+const suggestTimers = {};
+function scheduleSuggestions(tabId) {
+  clearTimeout(suggestTimers[tabId]);
+  suggestTimers[tabId] = setTimeout(() => { delete suggestTimers[tabId]; pushContext(); }, 1200);
+}
+
+if (api.tabs?.onUpdated) {
+  api.tabs.onUpdated.addListener((tabId, info) => {
+    if (info.status === "complete") scheduleSuggestions(tabId);
+  });
+}
+if (api.tabs?.onActivated) {
+  api.tabs.onActivated.addListener(({ tabId }) => scheduleSuggestions(tabId));
 }
 
 // ---- side panel opening (icon + keyboard) -----------------------------------
@@ -267,7 +326,33 @@ function arrayBufferToBase64(buf) {
   return btoa(binary);
 }
 
-async function captureScreenshot(tab, state) {
+// Draw numbered annotation circles on the screenshot canvas
+function drawAnnotations(ctx, items, w, h) {
+  const R = 10;
+  for (const it of items) {
+    // Small declutter offset to reduce overlap
+    const ox = (it.index % 5) * 2 - 4;
+    const oy = (it.index % 3) * 2 - 2;
+    const cx = Math.min(w - R, Math.max(R, it.x + ox));
+    const cy = Math.min(h - R, Math.max(R, it.y + oy));
+    // Circle background
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.fillStyle = "#da7756";
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "rgba(255,255,255,0.9)";
+    ctx.stroke();
+    // Number text
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 11px -apple-system, Segoe UI, Roboto, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(String(it.index), cx, cy + 0.5);
+  }
+}
+
+async function captureScreenshot(tab, state, tabId) {
   const dataUrl = await api.tabs.captureVisibleTab(tab.windowId, { format: "png" });
   const cssW = state?.viewportWidth || 0;
   const cssH = state?.viewportHeight || 0;
@@ -279,6 +364,13 @@ async function captureScreenshot(tab, state) {
     const canvas = new OffscreenCanvas(w, h);
     const ctx = canvas.getContext("2d");
     ctx.drawImage(bitmap, 0, 0, w, h);
+    // Draw numbered element annotations (best-effort)
+    try {
+      if (tabId) {
+        const ann = await sendToTab(tabId, { type: "get_annotations" });
+        if (ann?.ok && Array.isArray(ann.items) && ann.items.length) drawAnnotations(ctx, ann.items, w, h);
+      }
+    } catch (_) {}
     const outBlob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.7 });
     return { mimeType: "image/jpeg", data: arrayBufferToBase64(await outBlob.arrayBuffer()), width: w, height: h };
   } catch (_) {
@@ -289,6 +381,7 @@ async function captureScreenshot(tab, state) {
 // ---- debugger "power mode": OS-level input via CDP --------------------------
 
 const attachedTabs = new Set();
+let activeRecording = null; // { steps: [], site: "" }
 
 async function hasDebuggerPermission() {
   try {
@@ -358,6 +451,28 @@ if (api.tabs?.onRemoved) {
   api.tabs.onRemoved.addListener((tabId) => attachedTabs.delete(tabId));
 }
 
+// ---- recording events (content → background) --------------------------------
+
+if (api.runtime?.onMessage) {
+  api.runtime.onMessage.addListener((msg) => {
+    if (msg?.type === "recording_event" && activeRecording) {
+      activeRecording.steps.push(msg.step);
+      for (const p of connectedPorts) {
+        try { p.postMessage({ type: "recording_update", count: activeRecording.steps.length }); } catch (_) {}
+      }
+    }
+  });
+}
+
+// Re-issue record_start after tab navigation while recording
+if (api.tabs?.onUpdated) {
+  api.tabs.onUpdated.addListener(async (tabId, info) => {
+    if (info.status === "complete" && activeRecording) {
+      try { await sendToTab(tabId, { type: "record_start" }); } catch (_) {}
+    }
+  });
+}
+
 // ---- tool execution ---------------------------------------------------------
 // Returns { result: string, image?, newTabId? }.
 
@@ -374,9 +489,9 @@ async function executeTool(ctx, name, args, config) {
       const tab = await getTab(tabId);
       if (!tab) return { result: "Tab not found." };
       try {
-        const image = await captureScreenshot(tab, state);
+        const image = await captureScreenshot(tab, state, tabId);
         return {
-          result: `Screenshot captured. Image: ${image.width}×${image.height} px. Viewport: ${state.viewportWidth}×${state.viewportHeight} CSS px. Coordinates range from (0,0) top-left to (${image.width - 1},${image.height - 1}) bottom-right. Read coordinates CAREFULLY from the image — prefer click(index) when possible.`,
+          result: `Screenshot captured. Image: ${image.width}×${image.height} px. Interactive elements are labeled with numbered orange circles matching the [index] in the page state. Prefer click(index=N) over pixel coordinates — numbered elements are precise. Use click_at only for elements WITHOUT a numbered circle.`,
           media: image,
         };
       } catch (err) {
@@ -541,13 +656,31 @@ async function executeTool(ctx, name, args, config) {
       }
     }
     case "remember": {
-      const count = await addMemory(args.note || "");
+      const tab = await getTab(tabId);
+      const count = await addMemory(args.note || "", hostOf(tab?.url || ""), tab?.url);
       return { result: `Saved to memory (${count} notes total).` };
     }
     case "recall": {
       const mem = await getMemories();
       if (!mem.length) return { result: "No saved memories yet." };
       return { result: "Saved memories:\n" + mem.map((m) => `- ${m.note}`).join("\n") };
+    }
+    case "smart_fill": {
+      const s = await api.storage.local.get(["profiles", "activeProfile"]);
+      const profiles = Array.isArray(s.profiles) ? s.profiles : [];
+      const profile = profiles.find((p) => p.name === (args.profile || s.activeProfile)) || profiles[0];
+      if (!profile) return { result: "No saved profile found. Ask the user to add one in Settings → Fill Profile, then retry." };
+      const res = await sendToTab(tabId, { type: "fill_form", profile: profile.fields || {} });
+      if (!res?.ok) return { result: `Fill failed: ${res?.error}` };
+      const n = res.filled?.length || 0;
+      return { result: `Auto-filled ${n} field(s): ${(res.filled || []).map((f) => f.key).join(", ")}${n ? "." : " — no matching fields found."}` };
+    }
+    case "detect_form": {
+      const res = await sendToTab(tabId, { type: "detect_form" });
+      if (!res?.ok) return { result: `Failed: ${res?.error}` };
+      const fields = res.fields || [];
+      if (!fields.length) return { result: "No form fields detected on this page." };
+      return { result: `Detected ${fields.length} form field(s):\n${fields.map((f) => `- [${f.index}] <${f.tag}:${f.type}> name="${f.name}" label="${f.label}" placeholder="${f.placeholder}"`).join("\n")}` };
     }
     case "http_request": {
       let url = String(args.url || "").trim();
@@ -592,6 +725,74 @@ async function executeTool(ctx, name, args, config) {
       await delay(secs * 1000);
       return { result: `Waited ${secs}s.` };
     }
+
+    // ---- workflow recorder tools ---------------------------------------------
+    case "record_start": {
+      const tab = await getTab(tabId);
+      activeRecording = { steps: [{ type: "navigate", url: tab?.url || "" }], site: hostOf(tab?.url || "") };
+      try { await sendToTab(tabId, { type: "record_start" }); } catch (_) {}
+      return { result: "Recording started. The user's clicks, typing, selections, and scrolls are being captured." };
+    }
+    case "record_stop": {
+      try { await sendToTab(tabId, { type: "record_stop" }); } catch (_) {}
+      const n = activeRecording?.steps?.length || 0;
+      const result = `Recording stopped (${n} steps captured). Ask the user to name it, or call workflow_save.`;
+      activeRecording = activeRecording ? { ...activeRecording, stopped: true } : null;
+      return { result };
+    }
+    case "record_get": {
+      const steps = activeRecording?.steps || [];
+      return { result: `Recorded steps (${steps.length}):\n${JSON.stringify(steps, null, 1)}` };
+    }
+    case "workflow_save": {
+      if (!activeRecording?.steps?.length) return { result: "Nothing recorded yet. Call record_start first." };
+      const s = await api.storage.local.get(["workflows"]);
+      const workflows = s.workflows || [];
+      const wf = {
+        id: Date.now().toString(36),
+        name: String(args.name || "Workflow " + (workflows.length + 1)),
+        site: activeRecording.site || "",
+        steps: activeRecording.steps,
+        createdAt: Date.now(),
+      };
+      workflows.push(wf);
+      await api.storage.local.set({ workflows });
+      activeRecording = null;
+      return { result: `Saved workflow "${wf.name}" (${wf.steps.length} steps) for ${wf.site || "this site"}.` };
+    }
+    case "workflow_list": {
+      const s = await api.storage.local.get(["workflows"]);
+      const wfs = s.workflows || [];
+      if (!wfs.length) return { result: "No saved workflows yet." };
+      return { result: wfs.map((w) => `- ${w.name} (${w.steps.length} steps, ${w.site || "any"}) [id ${w.id}]`).join("\n") };
+    }
+    case "workflow_delete": {
+      const s = await api.storage.local.get(["workflows"]);
+      const wfs = (s.workflows || []).filter((w) => w.id !== args.id);
+      await api.storage.local.set({ workflows: wfs });
+      return { result: `Deleted workflow ${args.id}.` };
+    }
+    case "workflow_replay": {
+      const s = await api.storage.local.get(["workflows"]);
+      const wf = (s.workflows || []).find((w) => w.id === args.id || w.name === args.name);
+      if (!wf) return { result: `No saved workflow matching "${args.id || args.name}".` };
+      for (const step of wf.steps) {
+        if (interrupted) return { result: "Replay interrupted by user." };
+        if (step.type === "navigate") {
+          await api.tabs.update(tabId, { url: step.url });
+          await settle(tabId, 15000);
+          await ensureContentScript(tabId);
+        } else if (step.type === "scroll") {
+          await sendToTab(tabId, { type: "execute_js", code: `window.scrollTo(0, ${step.scrollY || 0})` });
+        } else {
+          const res = await sendToTab(tabId, { type: "workflow_step", step });
+          if (!res?.ok) return { result: `Replay stopped at a "${step.type}" step: ${res?.error}` };
+        }
+        await delay(450);
+      }
+      return { result: `Replayed workflow "${wf.name}" (${wf.steps.length} steps).` };
+    }
+
     default:
       return { result: `Unknown tool: ${name}` };
   }
@@ -604,7 +805,7 @@ async function settle(tabId, timeout = 8000) {
 
 // ---- gating: risk, blocked sites, per-site access ---------------------------
 
-const ACTION_TOOLS = ["click", "click_at", "type_text", "type_at", "navigate", "go_back", "upload_file", "open_tab", "drag", "http_request", "download", "execute_js", "write_clipboard", "press_keys"];
+const ACTION_TOOLS = ["click", "click_at", "type_text", "type_at", "navigate", "go_back", "upload_file", "open_tab", "drag", "http_request", "download", "execute_js", "write_clipboard", "press_keys", "smart_fill", "workflow_replay"];
 
 function isActionTool(name) {
   return ACTION_TOOLS.includes(name);
@@ -751,6 +952,8 @@ api.runtime.onConnect.addListener((port) => {
 
   loadSession().then((saved) => {
     if (saved.length) contents = saved;
+    // Push suggestions after panel connects
+    setTimeout(pushContext, 400);
   });
 
   port.onMessage.addListener(async (msg) => {
@@ -819,8 +1022,20 @@ api.runtime.onConnect.addListener((port) => {
       const isFirst = contents.length === 0;
       const memParts = [];
       if (isFirst) {
-        const mem = await getMemories();
-        if (mem.length) memParts.push({ text: `[Your long-term memory about this user]\n${mem.map((m) => "- " + m.note).join("\n")}` });
+        const globalMem = await getGlobalMemories();
+        if (globalMem.length) memParts.push({ text: `[Your long-term memory about this user]\n${globalMem.map((m) => "- " + m.note).join("\n")}` });
+      }
+
+      // Inject site-specific memories
+      const activeTab = await getTab(ctx.tabId);
+      const currentSite = hostOf(activeTab?.url || "");
+      if (currentSite) {
+        const siteMem = await getSiteMemories(activeTab?.url || "");
+        if (siteMem.length) memParts.push({ text: `[Memories saved for this site (${currentSite})]\n${siteMem.map((m) => "- " + m.note).join("\n")}` });
+        // Notify sidepanel of site memory count
+        for (const p of connectedPorts) {
+          try { p.postMessage({ type: "site_memories", count: siteMem.length, site: currentSite }); } catch (_) {}
+        }
       }
 
       const state = await getPageState(ctx.tabId);

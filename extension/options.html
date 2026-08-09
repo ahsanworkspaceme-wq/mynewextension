@@ -134,6 +134,52 @@
       <code>debugger</code> permission when you enable it.
     </div>
 
+    <hr style="margin: 30px 0; border: none; border-top: 1px solid #8884;" />
+    <h2 style="font-size: 18px; margin-bottom: 8px;">📝 Fill Profile</h2>
+    <p class="hint" style="margin-top: 0;">Save your details to auto-fill forms. Passwords are NEVER stored.</p>
+
+    <label for="profileSelect">Load profile</label>
+    <select id="profileSelect"
+      style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid #8884; background: transparent; color: inherit; font-size: 14px;">
+      <option value="">— New profile —</option>
+    </select>
+
+    <label for="pfName">Profile name</label>
+    <input id="pfName" type="text" placeholder="e.g. Personal, Work" />
+
+    <label for="pfFirstName">First name</label>
+    <input id="pfFirstName" type="text" placeholder="John" />
+
+    <label for="pfLastName">Last name</label>
+    <input id="pfLastName" type="text" placeholder="Doe" />
+
+    <label for="pfEmail">Email</label>
+    <input id="pfEmail" type="email" placeholder="john@example.com" />
+
+    <label for="pfPhone">Phone</label>
+    <input id="pfPhone" type="tel" placeholder="+1 234 567 890" />
+
+    <label for="pfAddress">Address</label>
+    <input id="pfAddress" type="text" placeholder="123 Main St" />
+
+    <label for="pfCity">City</label>
+    <input id="pfCity" type="text" placeholder="New York" />
+
+    <label for="pfState">State</label>
+    <input id="pfState" type="text" placeholder="NY" />
+
+    <label for="pfZip">Zip code</label>
+    <input id="pfZip" type="text" placeholder="10001" />
+
+    <label for="pfCountry">Country</label>
+    <input id="pfCountry" type="text" placeholder="USA" />
+
+    <div style="display: flex; gap: 10px; margin-top: 20px;">
+      <button id="saveProfile" style="flex: 1; margin-top: 0;">Save profile</button>
+      <button id="deleteProfile" style="flex: 0 0 auto; margin-top: 0; background: #e27a63; padding: 10px 16px;">Delete</button>
+    </div>
+    <span id="profileSaved" style="color: #22c55e; font-size: 13px; opacity: 0; transition: opacity 0.2s;">✓ Saved</span>
+
     <div>
       <button id="save">Save</button>
       <span id="saved">✓ Saved</span>
