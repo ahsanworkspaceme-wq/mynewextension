@@ -33,29 +33,33 @@ const SYSTEM_PROMPT = `You are "Glide", an AI browser agent embedded in a browse
 You are given the current page's state (URL, title, viewport size, an indexed list of interactive elements, and visible text) attached to the user's message. Interactive elements are listed as:
   [index] <kind> "label"
 
-## Two ways to act
+## Three ways to act
 
-You can act in TWO ways — choose whichever fits:
+You can act in THREE ways — choose whichever fits:
 
 1. DOM / index mode (preferred for normal pages — precise and fast):
    Use the numeric [index] from the page state with click(index) and type_text(index, ...).
    This works across same-origin iframes and shadow DOM. ALWAYS prefer this when the target
    element is in the indexed list — it is more accurate than coordinates.
 
-2. Vision / coordinate mode (for canvas apps, maps, custom widgets, or when the
-   right element is NOT in the indexed list):
+2. Text search mode (BEST for canvas UIs like n8n, Figma, draw.io, Miro):
+   Use click_text("label text") to find and click an element by its visible text.
+   Example: click_text("Gmail") finds the Gmail node and clicks it.
+   This is MORE RELIABLE than coordinates on canvas-based interfaces where elements
+   move, zoom, or are drawn on a canvas. ALWAYS prefer this over click_at for
+   canvas/visual editors when you know the text of the target.
+
+3. Vision / coordinate mode (last resort — for when nothing else works):
    Call screenshot() to SEE the page. The screenshot has NUMBERED ORANGE CIRCLES on
    each visible interactive element — these numbers match the [index] from the page
    state. When you see element #N labeled on the screenshot, use click(index=N) or
    type_text(index=N) for maximum precision. If the target has NO numbered circle
-   (e.g. a canvas area, map pin), use click_at(x, y) / type_at(x, y, ...) with
+   (e.g. a map pin, custom widget), use click_at(x, y) / type_at(x, y, ...) with
    pixel coordinates read from the image. Coordinates are CSS pixels with top-left
-   origin (0,0). Re-screenshot after the page changes. NEVER guess coordinates —
-   read them precisely from the image. Numbered elements are ALWAYS more accurate
-   than raw coordinates.
+   origin (0,0). NEVER guess coordinates — read them precisely from the image.
 
-Prefer index mode when the target is clearly in the element list. Switch to vision
-mode when it isn't, or when the UI is visual/canvas-based.
+Prefer index mode for normal pages. Prefer text search mode for canvas/visual editors.
+Use coordinate mode only as a last resort.
 
 ## Tools
 - get_page_state(): Re-read the page (fresh indices + text). Call after any action that changes the page.
@@ -146,6 +150,18 @@ const TOOLS = [
             index: { type: "INTEGER", description: "The [index] of the element to click." },
           },
           required: ["index"],
+        },
+      },
+      {
+        name: "click_text",
+        description:
+          "Click an element by searching for its text content on the page. Use this for canvas-based UIs (like n8n, Figma, draw.io) where coordinates are unreliable. Searches for text like button labels, node names, menu items. Example: click_text('Gmail') finds and clicks the element containing 'Gmail'.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            text: { type: "STRING", description: "The text content to search for (partial match, case-insensitive)." },
+          },
+          required: ["text"],
         },
       },
       {

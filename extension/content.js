@@ -494,6 +494,31 @@
     return bestDist <= maxDist ? best : null;
   }
 
+  // Find element by text content — searches visible text on the page.
+  function findElementByText(searchText) {
+    const query = searchText.toLowerCase().trim();
+    if (!query) return null;
+    // First try registry elements (interactive)
+    for (let i = 0; i < registry.length; i++) {
+      const el = registry[i];
+      const text = (el.innerText || el.textContent || el.value || el.getAttribute("aria-label") || "").toLowerCase();
+      if (text.includes(query)) return { el, index: i, source: "registry" };
+    }
+    // Then try all visible elements with text
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      if (node.textContent && node.textContent.toLowerCase().includes(query)) {
+        const el = node.parentElement;
+        if (el && isVisible(el)) {
+          const idx = registry.indexOf(el);
+          return { el, index: idx >= 0 ? idx : -1, source: "text" };
+        }
+      }
+    }
+    return null;
+  }
+
   async function doClickAt(x, y) {
     // Clamp coordinates to visible viewport
     const vw = window.innerWidth, vh = window.innerHeight;
@@ -943,6 +968,20 @@
           case "get_analysis":
             sendResponse({ ok: true, analysis: detectPageType() });
             break;
+          case "click_text": {
+            const result = findElementByText(msg.text || "");
+            if (!result) {
+              sendResponse({ ok: false, error: `No element found containing text "${msg.text}". Try get_page_state and use click(index) or use a different search term.` });
+            } else {
+              safeScrollIntoView(result.el, { block: "center", inline: "center" });
+              highlightElement(result.el);
+              await pause(300);
+              const r = result.el.getBoundingClientRect();
+              synthClick(result.el, r.left + r.width / 2, r.top + r.height / 2);
+              sendResponse({ ok: true, message: `Clicked element containing "${msg.text}" [${result.source}] → ${describe(result.el)}` });
+            }
+            break;
+          }
           case "pick_start":
             startPick(sendResponse);
             break;

@@ -523,6 +523,11 @@ async function executeTool(ctx, name, args, config) {
       await settle(tabId);
       return { result: res?.ok ? res.message : `Failed: ${res?.error}` };
     }
+    case "click_text": {
+      const res = await sendToTab(tabId, { type: "click_text", text: args.text });
+      await settle(tabId);
+      return { result: res?.ok ? res.message : `Failed: ${res?.error}` };
+    }
     case "type_text": {
       const res = await sendToTab(tabId, { type: "type_text", index: args.index, text: args.text, submit: !!args.submit });
       if (args.submit) await settle(tabId);
@@ -807,7 +812,7 @@ async function settle(tabId, timeout = 8000) {
 
 // ---- gating: risk, blocked sites, per-site access ---------------------------
 
-const ACTION_TOOLS = ["click", "click_at", "type_text", "type_at", "navigate", "go_back", "upload_file", "open_tab", "drag", "http_request", "download", "execute_js", "write_clipboard", "press_keys", "smart_fill", "workflow_replay"];
+const ACTION_TOOLS = ["click", "click_at", "click_text", "type_text", "type_at", "navigate", "go_back", "upload_file", "open_tab", "drag", "http_request", "download", "execute_js", "write_clipboard", "press_keys", "smart_fill", "workflow_replay"];
 
 function isActionTool(name) {
   return ACTION_TOOLS.includes(name);
@@ -837,6 +842,8 @@ function confirmDetail(name, args) {
       return `Click element [${args.index}]`;
     case "click_at":
       return `Click at (${args.x}, ${args.y})`;
+    case "click_text":
+      return `Click element containing "${args.text}"`;
     case "upload_file":
       return `Open file chooser for element [${args.index}]`;
     case "drag":
