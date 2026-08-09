@@ -21,7 +21,9 @@ const els = {
   workflowsList: document.getElementById("workflowsList"),
   n8nBuilder: document.getElementById("n8nBuilder"),
   recordBar: document.getElementById("recordBar"),
-  stopRecord: document.getElementById("stopRecord"),
+  recordBtn: document.getElementById("recordBtn"),
+  recordStatus: document.getElementById("recordStatus"),
+  stopRecordBtn: document.getElementById("stopRecordBtn"),
   workflowsPanel: document.getElementById("workflowsPanel"),
   pick: document.getElementById("pick"),
   skillsBar: document.getElementById("skillsBar"),
@@ -314,6 +316,11 @@ const TOOL_LABELS = {
   n8n_list_workflows: "Listing n8n workflows",
   n8n_get_workflow: "Getting n8n workflow",
   n8n_update_workflow: "Updating n8n workflow",
+  record_start: "Recording",
+  record_stop: "Stopping recording",
+  record_get: "Getting recording",
+  record_gif: "Generating GIF",
+  record_clear: "Clearing recording",
   wait: "Waiting",
 };
 // Minimal line-icons (inner SVG paths) for the activity feed.
@@ -357,6 +364,11 @@ const ACT_PATHS = {
   n8n_list_workflows: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M3 9h18"/>',
   n8n_get_workflow: '<circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/>',
   n8n_update_workflow: '<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  record_start: '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/>',
+  record_stop: '<circle cx="12" cy="12" r="7"/><rect x="9" y="9" width="6" height="6" rx="1"/>',
+  record_get: '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/>',
+  record_gif: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 3v18"/>',
+  record_clear: '<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
   wait: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
 };
 function actIcon(name, declined) {
@@ -905,6 +917,32 @@ els.workflowsList.addEventListener("click", async () => {
 // ---- n8n workflow builder ----------------------------------------------------
 els.n8nBuilder.addEventListener("click", () => {
   sendMessage("List my n8n workflows and help me create a new one");
+});
+
+// ---- Screen Recording (GIF) --------------------------------------------------
+let isRecording = false;
+els.recordBtn.addEventListener("click", async () => {
+  if (isRecording) return;
+  isRecording = true;
+  els.recordBar.hidden = false;
+  els.recordStatus.textContent = "Recording…";
+  els.recordBtn.style.color = "var(--danger)";
+  // Start recording via background
+  ensurePort().postMessage({ type: "user_message", text: "record_start" });
+});
+
+els.stopRecordBtn.addEventListener("click", async () => {
+  if (!isRecording) return;
+  isRecording = false;
+  els.recordBtn.style.color = "";
+  els.recordStatus.textContent = "Generating GIF…";
+  // Stop recording
+  ensurePort().postMessage({ type: "user_message", text: "record_stop" });
+  // Wait a moment, then generate GIF
+  setTimeout(() => {
+    ensurePort().postMessage({ type: "user_message", text: "record_gif" });
+    els.recordBar.hidden = true;
+  }, 500);
 });
 
 // ---- export chat ------------------------------------------------------------

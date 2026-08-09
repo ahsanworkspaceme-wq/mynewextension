@@ -64,7 +64,9 @@
     "notifications",
     "contextMenus",
     "clipboardRead",
-    "clipboardWrite"
+    "clipboardWrite",
+    "offscreen",
+    "webNavigation"
   ],
   "optional_permissions": ["debugger"],
   "host_permissions": ["<all_urls>"],

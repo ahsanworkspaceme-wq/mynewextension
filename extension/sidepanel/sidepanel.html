@@ -43,6 +43,9 @@
         <button id="n8nBuilder" class="icon-btn" title="n8n Workflow Builder" aria-label="n8n Builder">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
         </button>
+        <button id="recordBtn" class="icon-btn" title="Record screen as GIF" aria-label="Record">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>
+        </button>
         <button id="openOptions" class="icon-btn" title="Settings" aria-label="Settings">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
         </button>
@@ -55,6 +58,12 @@
     <div id="skillsBar" class="skills-bar" hidden></div>
 
     <div id="suggestionsBar" class="suggestions-bar" hidden></div>
+
+    <div id="recordBar" class="record-bar" hidden>
+      <span class="rec-dot"></span>
+      <span id="recordStatus" class="rec-text">Recording…</span>
+      <button id="stopRecordBtn" class="stop-btn">Stop & GIF</button>
+    </div>
 
     <div id="recordBar" class="record-bar" hidden>
       <span class="rec-dot"></span>

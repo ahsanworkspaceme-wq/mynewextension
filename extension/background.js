@@ -35,6 +35,72 @@ function estimateCost(model, usage) {
 
 const SESSION_KEY = "agentSession";
 
+// ============ OFFSCREEN DOCUMENT MANAGEMENT ============
+let offscreenCreated = false;
+async function ensureOffscreen() {
+  if (offscreenCreated) return;
+  try {
+    await api.offscreen.createDocument({
+      url: "offscreen.html",
+      reasons: ["AUDIO_PLAYBACK", "DOM_SCRAPING"],
+      justification: "Glide: Audio playback and GIF generation",
+    });
+    offscreenCreated = true;
+  } catch (e) {
+    if (e.message?.includes("already exists")) offscreenCreated = true;
+    else console.error("[Glide] Offscreen error:", e);
+  }
+}
+async function playNotificationSound() {
+  try {
+    await ensureOffscreen();
+    const s = await api.storage.local.get(["notificationSound"]);
+    if (s.notificationSound === false) return;
+    api.runtime.sendMessage({ type: "OFFSCREEN_PLAY_SOUND", audioUrl: api.runtime.getURL("sounds/notification.mp3"), volume: 0.4 }).catch(() => {});
+  } catch (_) {}
+}
+
+// ============ SCREENSHOT RECORDING ============
+let recordingFrames = [];
+let isRecording = false;
+async function startRecording(tabId) {
+  recordingFrames = [];
+  isRecording = true;
+  await api.storage.local.set({ isRecording: true });
+}
+async function stopRecording() {
+  isRecording = false;
+  await api.storage.local.set({ isRecording: false });
+  return recordingFrames;
+}
+async function captureRecordingFrame(tabId) {
+  if (!isRecording) return;
+  try {
+    const tab = await getTab(tabId);
+    if (!tab) return;
+    const dataUrl = await api.tabs.captureVisibleTab(tab.windowId, { format: "png" });
+    const base64 = dataUrl.split(",")[1];
+    recordingFrames.push({ base64, format: "png", delay: 800, timestamp: Date.now() });
+    // Limit to 50 frames max
+    if (recordingFrames.length > 50) recordingFrames.shift();
+  } catch (_) {}
+}
+async function generateRecordingGif() {
+  if (!recordingFrames.length) return null;
+  try {
+    await ensureOffscreen();
+    const result = await api.runtime.sendMessage({
+      type: "GENERATE_GIF",
+      frames: recordingFrames,
+      options: { showClickIndicators: true, showActionLabels: true, showProgressBar: true, showWatermark: true, quality: 10 },
+    });
+    if (result?.success) return result.result;
+  } catch (e) {
+    console.error("[Glide] GIF generation error:", e);
+  }
+  return null;
+}
+
 async function getConfig() {
   const s = await api.storage.local.get([
     "backendUrl",
@@ -876,6 +942,29 @@ async function executeTool(ctx, name, args, config) {
       }
     }
 
+    // ---- Recording tools -----------------------------------------------------
+    case "record_start": {
+      await startRecording(tabId);
+      await captureRecordingFrame(tabId); // Capture initial state
+      return { result: "Recording started. Actions will be captured as screenshots." };
+    }
+    case "record_stop": {
+      const frames = await stopRecording();
+      return { result: `Recording stopped. ${frames.length} frames captured.` };
+    }
+    case "record_get": {
+      return { result: `Recording has ${recordingFrames.length} frames.` };
+    }
+    case "record_gif": {
+      const gifResult = await generateRecordingGif();
+      if (!gifResult) return { result: "No frames to generate GIF. Start recording first." };
+      return { result: `GIF generated! Size: ${Math.round(gifResult.size / 1024)}KB`, media: { mimeType: "image/gif", data: gifResult.base64 } };
+    }
+    case "record_clear": {
+      recordingFrames = [];
+      return { result: "Recording frames cleared." };
+    }
+
     default:
       return { result: `Unknown tool: ${name}` };
   }
@@ -1280,6 +1369,11 @@ api.runtime.onConnect.addListener((port) => {
           if (out.newTabId) ctx.tabId = out.newTabId;
           const thumb = out.media && String(out.media.mimeType).startsWith("image") ? `data:${out.media.mimeType};base64,${out.media.data}` : undefined;
           send({ type: "tool_result", name: call.name, result: out.result, thumb });
+
+          // Capture frame for recording if active
+          if (isRecording && ["click", "click_at", "click_text", "type_text", "type_at", "scroll", "navigate"].includes(call.name)) {
+            await captureRecordingFrame(ctx.tabId);
+          }
 
           responseParts.push({ functionResponse: { name: call.name, response: { result: String(out.result) } } });
           if (out.media) responseParts.push({ inlineData: { mimeType: out.media.mimeType, data: out.media.data } });
