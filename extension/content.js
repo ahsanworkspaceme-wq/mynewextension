@@ -274,33 +274,51 @@
   let cursorEl = null;
   let cursorX = -100;
   let cursorY = -100;
+
   function ensureCursor() {
     if (cursorEl && document.documentElement.contains(cursorEl)) return cursorEl;
     cursorEl = document.createElement("div");
     Object.assign(cursorEl.style, {
       position: "fixed",
-      left: "0",
-      top: "0",
-      width: "22px",
-      height: "22px",
+      left: "0px",
+      top: "0px",
+      width: "24px",
+      height: "24px",
       background: "#ffffff",
       clipPath: "polygon(0 0, 0 78%, 24% 60%, 42% 100%, 56% 93%, 39% 55%, 72% 55%)",
-      filter: "drop-shadow(0 0 1px rgba(0,0,0,0.75)) drop-shadow(0 3px 6px rgba(0,0,0,0.35))",
+      filter: "drop-shadow(0 0 2px rgba(0,0,0,0.9)) drop-shadow(0 4px 8px rgba(0,0,0,0.4))",
       zIndex: "2147483647",
       pointerEvents: "none",
       transformOrigin: "top left",
-      transform: "translate(-100px,-100px)",
-      transition: "transform 0.5s cubic-bezier(0.16,1,0.3,1)",
+      transform: "translate(-200px, -200px)",
+      transition: "transform 0.3s ease-out",
+      opacity: "1",
     });
     document.documentElement.appendChild(cursorEl);
     return cursorEl;
   }
+
   function moveCursor(x, y) {
     try {
       cursorX = x;
       cursorY = y;
       const c = ensureCursor();
+      // Force reflow to ensure cursor is visible
+      c.style.display = "none";
+      c.offsetHeight; // trigger reflow
+      c.style.display = "";
       c.style.transform = `translate(${x - 3}px, ${y - 2}px) scale(1)`;
+      c.style.opacity = "1";
+    } catch (e) {
+      // If cursor fails, recreate it
+      cursorEl = null;
+      try {
+        const c = ensureCursor();
+        c.style.transform = `translate(${x - 3}px, ${y - 2}px) scale(1)`;
+        c.style.opacity = "1";
+      } catch (_) {}
+    }
+  }
     } catch (_) {}
   }
   function cursorPress() {
@@ -474,10 +492,18 @@
     const el = findByIndex(index);
     if (!el) return { ok: false, error: `No element with index ${index}. Call get_page_state to refresh indices.` };
     safeScrollIntoView(el, { block: "center", inline: "center" });
-    highlightElement(el);
-    await pause(350);
+    await pause(200);
     const r = el.getBoundingClientRect();
-    synthClick(el, r.left + r.width / 2, r.top + r.height / 2);
+    const cx = r.left + r.width / 2;
+    const cy = r.top + r.height / 2;
+    // Move cursor to element
+    moveCursor(cx, cy);
+    await pause(200);
+    // Flash element
+    flash({ left: r.left, top: r.top, width: r.width, height: r.height });
+    await pause(150);
+    // Click
+    synthClick(el, cx, cy);
     return { ok: true, message: `Clicked [${index}] ${describe(el)}` };
   }
 
@@ -560,9 +586,22 @@
 
     if (!el) return { ok: false, error: `No element found near (${x}, ${y}). Try click_text() or click(index) instead.` };
 
-    // Move cursor and click — ALWAYS do this so cursor moves
-    synthClick(el, x, y);
-    return { ok: true, message: `Clicked at (${x}, ${y}) [${method}] → ${describe(el)}` };
+    // Get the ACTUAL element position and move cursor there
+    const r = el.getBoundingClientRect();
+    const actualX = r.left + r.width / 2;
+    const actualY = r.top + r.height / 2;
+
+    // Move cursor to ACTUAL element position (not original coordinates)
+    moveCursor(actualX, actualY);
+    await pause(200);
+
+    // Flash the element
+    flash({ left: r.left, top: r.top, width: r.width, height: r.height });
+    await pause(150);
+
+    // Click at the actual element position
+    synthClick(el, actualX, actualY);
+    return { ok: true, message: `Clicked at (${Math.round(actualX)}, ${Math.round(actualY)}) [${method}] → ${describe(el)}` };
   }
 
   async function doType(index, text, submit) {
@@ -990,10 +1029,18 @@
               sendResponse({ ok: false, error: `No element found containing text "${msg.text}". Try get_page_state and use click(index) or use a different search term.` });
             } else {
               safeScrollIntoView(result.el, { block: "center", inline: "center" });
-              highlightElement(result.el);
-              await pause(300);
+              await pause(200);
               const r = result.el.getBoundingClientRect();
-              synthClick(result.el, r.left + r.width / 2, r.top + r.height / 2);
+              const cx = r.left + r.width / 2;
+              const cy = r.top + r.height / 2;
+              // Move cursor to element center FIRST
+              moveCursor(cx, cy);
+              await pause(200);
+              // Flash the element
+              flash({ left: r.left, top: r.top, width: r.width, height: r.height });
+              await pause(150);
+              // Click
+              synthClick(result.el, cx, cy);
               sendResponse({ ok: true, message: `Clicked element containing "${msg.text}" [${result.source}] → ${describe(result.el)}` });
             }
             break;
