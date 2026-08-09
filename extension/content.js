@@ -560,16 +560,7 @@
 
     if (!el) return { ok: false, error: `No element found near (${x}, ${y}). Try click_text() or click(index) instead.` };
 
-    // AUTO-RETRY: If we hit a generic div/container on a canvas UI, try text search
-    const desc = describe(el).toLowerCase();
-    const isGeneric = el.tagName === "DIV" || el.tagName === "SPAN" || el.tagName === "MAIN";
-    const isCanvasUI = document.querySelector("canvas") || document.querySelector("[data-testid]") ||
-      /n8n|figma|draw\.io|miro|excalidraw/i.test(location.href);
-    if (isGeneric && isCanvasUI && method !== "text-search") {
-      // Don't click generic divs on canvas UIs — they're usually wrong
-      return { ok: false, error: `Hit a generic ${el.tagName} on a canvas UI — coordinates are unreliable here. Use click_text("label") instead.`, suggestion: "use_click_text" };
-    }
-
+    // Move cursor and click — ALWAYS do this so cursor moves
     synthClick(el, x, y);
     return { ok: true, message: `Clicked at (${x}, ${y}) [${method}] → ${describe(el)}` };
   }
